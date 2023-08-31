@@ -1,0 +1,23 @@
+{% extends 'admin/master.html' %}
+
+{% block head %}
+{% endblock %}
+
+{% block body %}
+<p>Hi, welcome to EAF Cafe-Regs Secret Santa.</p>
+
+<h3>How It Works:</h3>
+<p>You sign up. When we close registration we will assign Secret Santas. Once Secret Santas are assigned, we will
+    reach out to all users and ask them to upload their addresses. </p>
+<p>When your address is uploaded, it is encrypted using your Secret Santa's public key.
+    This way only your Secret Santa can decrypt it.</p>
+<p>Don't lose your password you create for your key: if you do, you won't be able to decrypt the address sent to you
+    (we store your encrypted key on our servers). </p>
+<p>If you have any problems please DM ross3777 on discord.</p>
+<br/>
+<p>All data will be deleted after the Secret Santa ends. </p>
+<br />
+<a href="{{ url_for('login_with_discord') }}">
+<button>Login with Discord to get started.</button></a>
+{% endblock %}
+

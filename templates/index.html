@@ -1,0 +1,58 @@
+{% extends 'admin/master.html' %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"
+        integrity="sha512-95iy0RZIbw3H/FgfAj2wnCQJlzFQ+eaSfUeV/l8WVyGHKSRMzm3M/O+85j9ba/HFphkijrCTDjcuDX0BL2lthA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+    // Generate a new RSA key pair
+    const keyPair = forge.pki.rsa.generateKeyPair({bits: 2048});
+
+    // Convert the public key to PEM format
+    const publicKeyPem = forge.pki.publicKeyToPem(keyPair.publicKey);
+
+    // Convert the private key to PEM format
+    const privateKeyPem = forge.pki.privateKeyToPem(keyPair.privateKey);
+
+    // Example data to encrypt
+    const dataToEncrypt = 'This is some example data to encrypt';
+
+    // Encrypt the data using the public key
+    const encryptedData = keyPair.publicKey.encrypt(dataToEncrypt);
+
+    // Decrypt the encrypted data using the private key
+    const decryptedData = keyPair.privateKey.decrypt(encryptedData);
+
+    // Create a random salt for PBKDF2
+    const salt = forge.random.getBytesSync(16);
+    const iv = salt;
+
+    // Derive a key from the password using PBKDF2
+    const password = 'your_secure_password';
+    const iterations = 10000; // Adjust the number of iterations as needed for security
+    const derivedKey = forge.pkcs5.pbkdf2(password, salt, iterations, 32); // 32 bytes key size
+
+    // Encrypt the private key using AES with the derived key and IV
+    const cipher = forge.cipher.createCipher('AES-CBC', derivedKey);
+    cipher.start({iv});
+    cipher.update(forge.util.createBuffer(privateKeyPem));
+    cipher.finish();
+    const encryptedPrivateKey = cipher.output.getBytes();
+
+    // Decrypt the private key using the derived key and IV
+    const decipher = forge.cipher.createDecipher('AES-CBC', derivedKey);
+    decipher.start({iv});
+    decipher.update(forge.util.createBuffer(encryptedPrivateKey));
+    decipher.finish();
+    const decryptedPrivateKeyPem = decipher.output.toString();
+
+    console.log(encryptedPrivateKey);
+    console.log(decryptedPrivateKeyPem);
+
+</script>
+{% endblock %}
+
+{% block body %}
+<a href="/test-dm">Send a Test DM</a>
+{% endblock %}
+
