@@ -14,6 +14,7 @@ import config
 from models import initialize_database, User, Match
 
 app = Flask(__name__)
+
 app.secret_key = config.SECRET_KEY
 
 # Flask-Login setup
@@ -21,22 +22,22 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 app.config['FLASK_ADMIN_SWATCH'] = 'superhero'
+initialize_database(app)
 
 
 # initialize_database(app)
 
 
 def users_without_secret_santa_exist():
-    with app.app_context():
-        users = User.select()
-        matches = Match.select()
-        if not matches:
-            # we don't want to trigger this if matching has not yet been performed
-            return False
-        for user in users:
-            if not user.secret_santa:
-                return True
+    users = User.select()
+    matches = Match.select()
+    if not matches:
+        # we don't want to trigger this if matching has not yet been performed
         return False
+    for user in users:
+        if not user.secret_santa:
+            return True
+    return False
 
 
 @app.context_processor
@@ -52,8 +53,7 @@ def inject_variables():
     gift_comments = ""
 
     if current_user.is_authenticated:
-        with app.app_context():
-            gift_comments = current_user.get_gift_comments()
+        gift_comments = current_user.get_gift_comments()
 
     return {
         'default_song': default_song,
