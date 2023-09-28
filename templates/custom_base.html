@@ -1,0 +1,487 @@
+{% extends 'admin/base.html' %}
+{% block head_css %}
+    {{ super() }}
+    <style>
+        nav.navbar.navbar-default.navbar-static-top {
+            font-size: 16px;
+            margin-bottom: 2em !important;
+        }
+
+        body {
+            font-size: 18px;
+            /*font-weight: bold;*/
+            font-family: sans-serif !important;
+        }
+
+        h3 {
+            font-weight: bold;
+            color: #c20000;
+        }
+
+        .navbar {
+            font-size: 18px !important;
+        }
+
+        /* Reset some default Bootstrap styles */
+        body {
+            background-image: url('/static/imgs/bg.png'); /* Replace with your North Pole image */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: #fff; /* White text on dark background */
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+
+        .container {
+            background-color: rgba(0, 0, 0, 0.84);
+            margin: 0 auto;
+            border: 1px;
+            border-radius: 20px;
+            padding: 2em;
+            margin-bottom: 2em;
+        }
+
+        label {
+            font-size: 18px;
+            color: #c20000;
+        }
+
+        body {
+            padding: 2em;
+        }
+
+        /* Navbar */
+        .navbar {
+            color: black !important;
+            /*background: linear-gradient(45deg, #ff0000 25%, #fff 25%, #fff 50%, #ff0000 50%, #ff0000 75%, #fff 75%, #fff);*/
+            background-size: 20px 20px;
+            border-color: #ffeb3b; /* Yellow border */
+            border-width: 2px;
+            background-color: #007e1a;
+        }
+
+        .btn-success, .btn-success:hover {
+            color: black;
+            background-color: #007e1a !important;
+            border-color: rgba(0, 0, 0, 0);
+
+        }
+
+        a, a:hover {
+            color: #c20000;
+            cursor: pointer;
+        }
+
+        .highlight-background a {
+            padding: 5px;
+        }
+
+        .navbar-brand {
+            font-size: 28px;
+            font-weight: bold;
+            /*background: -webkit-linear-gradient(45deg, #ff0000 25%, #fff 25%, #fff 50%, #ff0000 50%, #ff0000 75%, #fff 75%, #fff);*/
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: black !important;
+        }
+
+        /* Active Navbar Items with Green and White Stripes */
+        .navbar-default .navbar-nav > .active > a,
+        .navbar-default .navbar-nav > .active > a:hover,
+        .navbar-default .navbar-nav > .active > a:focus, p.highlight-background a {
+            color: black !important;
+            font-weight: bold;
+            font-size: 22px;
+            background: linear-gradient(45deg, #91cc9d 25%, #007e1a 25%, #007e1a 50%, #91cc9d 50%, #91cc9d 75%, #007e1a 75%, #007e1a);
+            background-size: 20px 20px;
+            position: relative;
+        }
+
+        textarea, .form-control, button {
+            color: black !important;
+            font-weight: bold !important;
+            font-size: 22px !important;
+
+            background: repeating-linear-gradient(
+                    45deg,
+                    #91cc9d,
+                    #91cc9d 25px,
+                    #248c35 25px,
+                    #248c35 50px
+            ) !important;
+            position: relative;
+        }
+
+        .navbar-default .navbar-nav > li > a {
+            color: black;
+            font-weight: bold;
+        }
+
+
+        .navbar-default .navbar-nav > li > a:hover {
+            transform: rotate(360deg); /* Spin the button on hover */
+            background: linear-gradient(45deg, #91cc9d 25%, #007e1a 25%, #007e1a 50%, #91cc9d 50%, #91cc9d 75%, #007e1a 75%, #007e1a);
+            background-size: 20px 20px;
+            position: relative;
+            color: black;
+
+            /* Alternate between colors */
+        }
+
+        p:nth-child(odd) {
+            color: #c20000;
+        }
+
+        p:nth-child(even) {
+            color: #007e1a;
+        }
+
+        li, li > * {
+            color: #007e1a;
+        }
+
+        li.active, li.active > * {
+            color: #c20000;
+        }
+
+        button {
+            color: black !important;
+            background-color: #007e1a;
+        }
+
+        textarea {
+            width: 300px;
+            height: 100px;
+        }
+
+        .hiddenForm {
+            display: none;
+        }
+
+        hr {
+            width: 100%;
+            height: 3px; /* Adjust the height as needed */
+            border: none;
+            background: repeating-linear-gradient(
+                    -65deg,
+                    #91cc9d,
+                    #91cc9d 10px,
+                    #007e1a 10px,
+                    #007e1a 20px
+            );
+            background-size: 20px 20px; /* Adjust the size of the stripes */
+            margin: 0;
+            position: relative;
+        }
+
+
+        /* Hide the default checkbox */
+        input[type="checkbox"] {
+            display: none;
+        }
+
+        /* Define the Christmas light styles */
+        .form-check-label {
+            width: 20px;
+            height: 40px;
+            display: inline-block;
+            position: relative;
+            background-color: #bebebe; /* Default color for the light */
+            border-radius: 50%;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Style the lit light when the checkbox is checked */
+        input[type="checkbox"]:checked + .form-check-label {
+            background-color: #0f0; /* Color for the lit light */
+        }
+
+        /* Add some animation for fun */
+        input[type="checkbox"]:checked + .form-check-label::before {
+            content: "";
+            width: 9px;
+            height: 30px;
+            background-color: rgba(255, 255, 0, 0.8); /* Color for the light bulb */
+            border-radius: 50%;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: flicker 1s infinite alternate;
+        }
+
+        input[type="checkbox"] + .form-check-label::before {
+            content: "";
+            width: 9px;
+            height: 30px;
+            background-color: rgba(24, 24, 24, 0.1); /* Color for the light bulb */
+            border-radius: 50%;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .form-check-label span {
+            margin-left: 25px;
+            position: relative;
+            top: 10px;
+            white-space: nowrap;
+        }
+
+        @keyframes flicker {
+            0% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+    </style>
+
+    <script src="/static/js/snowstorm.js"></script>
+    <script>
+        snowStorm.autoStart = true;
+        snowStorm.animationInterval = 50;
+        snowStorm.followMouse = false;
+        snowStorm.snowStick = true;
+        snowStorm.excludeMobile = false;
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"
+            integrity="sha512-95iy0RZIbw3H/FgfAj2wnCQJlzFQ+eaSfUeV/l8WVyGHKSRMzm3M/O+85j9ba/HFphkijrCTDjcuDX0BL2lthA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+{% endblock %}
+{% block page_body %}
+    {% if 'original_user' in session %}
+        <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
+            <div class="navbar-header">
+                <a class="navbar-brand">Viewing website as: {{ current_user.discord_username }}</a>
+                <form class="navbar-form" action="{{ url_for('end_impersonation') }}">
+                    <input class="btn btn-primary" id="submit" name="submit" type="submit" value="End Impersonation">
+                </form>
+            </div>
+        </nav>
+        <script src="/static/js/snow.js"></script>
+
+
+    {% endif %}
+
+    {{ super() }}
+    <div class="container">
+        <audio id="audio" preload="auto" tabindex="0" controls="" type="audio/mpeg" autoplay>
+            <source type="audio/mp3" src="{{ url_for('static', filename='mp3/' + default_song) }}">
+            Sorry, your browser does not support HTML5 audio.
+        </audio>
+        <button id="skip-button">Skip</button>
+        <button id="shuffle-button">Shuffle</button>
+        <ul id="playlist">
+            <li class="active">
+                <a href="{{ url_for('static', filename='mp3/' + default_song) }}">{{ default_song }}</a>
+            </li>
+            {% for song in songs %}
+                <li>
+                    <a href="{{ url_for('static', filename='mp3/' + song) }}">{{ song }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+{% endblock %}
+
+{% block tail %}
+    <script>
+        $(document).ready(function () {
+            var audio;
+            var playlist;
+            var tracks;
+            var current;
+
+            init();
+
+            function init() {
+                current = 0;
+                audio = $('audio');
+                playlist = $('#playlist');
+                tracks = playlist.find('li a');
+                len = tracks.length - 1;
+                audio[0].volume = .10;
+                playlist.find('a').click(function (e) {
+                    e.preventDefault();
+                    link = $(this);
+                    current = link.parent().index();
+                    run(link, audio[0]);
+                });
+                audio[0].addEventListener('ended', function (e) {
+                    current++;
+                    if (current == len) {
+                        current = 0;
+                        link = playlist.find('a')[0];
+                    } else {
+                        link = playlist.find('a')[current];
+                    }
+                    run($(link), audio[0]);
+                });
+
+            }
+
+            var skipButton = $('#skip-button');
+            var shuffleButton = $('#shuffle-button');
+
+            // Add these lines in the init() function to set up event listeners for the new buttons
+            skipButton.click(function () {
+                current++;
+                if (current > len) {
+                    current = 0;
+                }
+                var link = playlist.find('a')[current];
+                run($(link), audio[0]);
+
+            });
+
+            shuffleButton.click(function () {
+                current = Math.floor(Math.random() * (len + 1));
+                var link = playlist.find('a')[current];
+                run($(link), audio[0]);
+            });
+
+            function run(link, player) {
+                player.src = link.attr('href');
+                par = link.parent();
+                par.addClass('active').siblings().removeClass('active');
+                audio[0].load();
+            }
+        })
+
+    </script>
+    <script>
+
+        function decryptDataWithPrivateKeyPW(encryptedData, privateKey, password) {
+            const privateKeyPem = forge.pki.privateKeyFromPem(
+                privateKey,
+                password
+            );
+            const decodedData = forge.util.decode64(encryptedData);
+            const decipher = forge.pki.rsa.decrypt(decodedData, privateKeyPem);
+            return decipher.toString('utf8');
+        }
+
+        function getKeyPair(password) {
+            const rsaKeyPair = forge.pki.rsa.generateKeyPair(2048);
+
+            const privateKeyPem = forge.pki.privateKeyToPem(
+                rsaKeyPair.privateKey,
+                password
+            );
+
+            const publicKeyPem = forge.pki.publicKeyToPem(rsaKeyPair.publicKey);
+
+            return [privateKeyPem, publicKeyPem]
+        }
+
+        function encryptDataWithPublicKey(dataToEncrypt, publicKeyPem) {
+            const dataBuffer = forge.util.encodeUtf8(dataToEncrypt);
+            const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
+            const cipher = publicKey.encrypt(dataBuffer);
+            return forge.util.encode64(cipher);
+        }
+
+        const discordUserId = `{{ session['user_id'] }}`;
+        let privateKey = `{{ session['private_key'] }}`;
+        let publicKey = `{{ session['public_key'] }}`;
+
+        if (!privateKey) {
+            console.log("Generating new key pair. ")
+            let publicPrivateKey = getKeyPair();
+            privateKey = publicPrivateKey[0];
+            publicKey = publicPrivateKey[1];
+            let data = {
+                'publicKey': publicKey,
+                'privateKey': privateKey,
+            };
+            fetch("/store-keys", {
+                method: "POST",
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+        }
+
+        function encryptAndSendData() {
+            const ssPublicKey = `{{ current_user.secret_santa_public_key }}`;
+            const addressData = document.getElementById('address').value;
+            const encryptedData = encryptDataWithPublicKey(addressData, ssPublicKey);
+            const data = {'encryptedAddress': encryptedData};
+
+            fetch('/store-address', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            }).then((response) => {
+                if (!response.ok) {
+                    alert("Not good. Contact ross() on discord. ")
+                } else {
+                    location.reload();
+                }
+
+            })
+        }
+
+        function saveGiftComments(e) {
+
+            const data = {
+                'giftComments': document.getElementById('giftComments').value,
+                'shipInternationally': document.getElementById('shipInternationally').checked,
+                'receivedGift': document.getElementById('receivedGift').checked,
+                'country': document.getElementById('country').value,
+            };
+
+            fetch('/store-gift-comments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            }).then((response) => {
+                if (!response.ok) {
+                    alert("Not good. Contact ross() on discord. ")
+                } else {
+                    $("#commentContainer").toggle();
+                }
+            })
+        }
+
+        $(document).ready(function () {
+
+            const matchedAddressData = document.getElementsByClassName('matchedAddress');
+            for (const element of matchedAddressData) {
+                element.textContent = decryptDataWithPrivateKeyPW(element.innerText, privateKey, discordUserId);
+            }
+
+            const hf = $(".hiddenForm");
+            $(".toggleForm").click(function () {
+                hf.toggle();
+            })
+
+            const userComments = `{{ gift_comments }}`;
+
+            const commentContainer = $("#commentContainer")
+            const commentToggler = $("#toggleComments")
+
+            if (userComments) {
+                commentContainer.hide()
+            }
+
+            commentToggler.click(function () {
+                commentContainer.toggle();
+            })
+
+
+        })
+
+    </script>
+    {{ super() }}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends 'admin/master.html' %}
+
+{% block head %}
+{% endblock %}
+
+{% block body %}
+<a href="{{ url_for('matching.create_matches') }}">
+    <button type="button" class="btn btn-success">Match Users.</button>
+</a>
+{% endblock %}
+

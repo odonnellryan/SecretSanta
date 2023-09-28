@@ -1,0 +1,69 @@
+{% extends 'admin/master.html' %}
+
+{% block head %}
+{% endblock %}
+
+{% block body %}
+    <div>
+        <p>Say something, like: "I like piss" or "give me coal" or "whatever bana says is best".</p>
+        <p>It doesn't have to be just coffee stuff.</p>
+        <div class="form-group">
+            <label for="giftComments">Gift Comments</label>
+            <textarea class="form-control" id="giftComments"
+                      name="giftComments">{{ current_user.get_gift_comments() }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="countries">Set Your Country</label>
+            <select class="form-control" id="country" name="country" class="js-example-basic-single"
+                    style="width: 300px;">
+                {% for country in current_user.AVAILABLE_COUNTRIES %}
+                    <option value="{{ country }}"
+                            {% if country== current_user.country %}selected {% endif %}>{{ country }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="shipInternationally" name="shipInternationally" {% if
+           current_user.ship_internationally %}checked {% endif %}>
+            <label class="form-check-label" for="shipInternationally">
+                <span>
+                    Ship Internationally?
+                </span>
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="receivedGift" name="receivedGift" {% if
+           current_user.received_gift %}checked {% endif %}>
+            <label class="form-check-label" for="receivedGift">
+                <span>
+                    Received Gift?
+                </span>
+            </label>
+        </div>
+        <button class="btn" type="submit" onclick="saveGiftComments()">Save</button>
+        <br/>
+        <br/>
+    </div>
+    {% if current_user.secret_santa %}
+        {% if current_user.address_for_secret_santa %}
+            <p class="toggleForm"><a><strong>YOUR ADDRESS IS SET!!! Click here to update.</strong></a></p>
+            <div class="hiddenForm">
+                <p>We don't show your address because we can't decrypt it. Updating it will probably work. </p>
+                <textarea id="address"></textarea>
+                <br/>
+                <button id="saveAddress" type="submit" onclick="encryptAndSendData()">Save Address
+                </button>
+            </div>
+        {% else %}
+            <p><strong>PLEASE SET YOUR ADDRESS!!! </strong></p>
+            <textarea id="address"></textarea>
+            <br/>
+            <button id="saveAddress" type="submit" onclick="encryptAndSendData()">Save Address</button>
+        {% endif %}
+        <br/>
+    {% endif %}
+{% endblock %}
+
