@@ -27,15 +27,16 @@ app.config['FLASK_ADMIN_SWATCH'] = 'superhero'
 
 
 def users_without_secret_santa_exist():
-    users = User.select()
-    matches = Match.select()
-    if not matches:
-        # we don't want to trigger this if matching has not yet been performed
+    with app.app_context():
+        users = User.select()
+        matches = Match.select()
+        if not matches:
+            # we don't want to trigger this if matching has not yet been performed
+            return False
+        for user in users:
+            if not user.secret_santa:
+                return True
         return False
-    for user in users:
-        if not user.secret_santa:
-            return True
-    return False
 
 
 @app.context_processor
@@ -51,7 +52,8 @@ def inject_variables():
     gift_comments = ""
 
     if current_user.is_authenticated:
-        gift_comments = current_user.get_gift_comments()
+        with app.app_context():
+            gift_comments = current_user.get_gift_comments()
 
     return {
         'default_song': default_song,
