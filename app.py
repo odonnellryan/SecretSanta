@@ -1,9 +1,6 @@
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta
 import random
-from typing import List
-
 from flask import Flask, redirect, url_for, request, flash, session
 from flask_admin import Admin, expose, BaseView, AdminIndexView
 from flask_admin.contrib.peewee import ModelView
@@ -24,7 +21,9 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 app.config['FLASK_ADMIN_SWATCH'] = 'superhero'
-initialize_database(app)
+
+
+# initialize_database(app)
 
 
 def users_without_secret_santa_exist():
@@ -279,7 +278,8 @@ class UserView(ModelView):
     }
 
     column_list = (
-        'discord_username', 'secret_santa', 'recipients', 'address_for_secret_santa', 'received_gift', 'created', 'is_admin', 'impersonate')
+        'discord_username', 'secret_santa', 'recipients', 'address_for_secret_santa', 'received_gift', 'created',
+        'is_admin', 'impersonate')
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.is_admin

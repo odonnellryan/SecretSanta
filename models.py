@@ -101,3 +101,9 @@ def initialize_database(app):
     flask_db.init_app(app)
     with app.app_context():
         flask_db.database.create_tables([User, Match, Settings], safe=True)
+
+
+if __name__ == '__main__':
+    from app import app
+
+    initialize_database(app)
