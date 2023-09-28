@@ -59,7 +59,8 @@ def inject_variables():
         'default_song': default_song,
         'songs': file_list,
         'users_without_secret_santa_exist': users_without_secret_santa_exist(),
-        'gift_comments': gift_comments
+        'gift_comments': gift_comments,
+        'matches_exist': len(Match.select())
     }
 
 

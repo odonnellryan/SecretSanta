@@ -14,10 +14,11 @@
         </p>
 
     {% endif %}
-
-    <p>You have to buy: {{ current_user.n_recipients }} gift{% if current_user.n_recipients > 1 %}s{% endif %}.</p>
-    {% if current_user.n_recipients == 0 %}
-        <p>Sorry. You don't get to be a santa. Ping ross() if you're upset, you can send him coffee. </p>
+    {% if matches_exist and current_user.secret_santa %}
+        <p>You have to buy: {{ current_user.n_recipients }} gift{% if current_user.n_recipients > 1 %}s{% endif %}.</p>
+        {% if current_user.n_recipients == 0 %}
+            <p>Sorry. You don't get to be a santa. Ping ross() if you're upset, you can send him coffee. </p>
+        {% endif %}
     {% endif %}
     <br/>
     {% for recipient in current_user.recipients %}
