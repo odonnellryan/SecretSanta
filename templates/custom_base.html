@@ -239,6 +239,32 @@
                 opacity: 1;
             }
         }
+        
+        body{margin:0; padding:0}
+        #sticker {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        margin: 0px auto;
+        }
+
+        .front,
+        .reveal {
+        position: absolute;
+        width: 100vw;
+        height: 100vh;
+        }
+
+        .front {
+        background: #c80000 url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAA8CAYAAAA6/NlyAAACoElEQVRo3uXazystYRgH8HM4HSU7NpJTkkKxspCdu7ruQthaW1iIjTpR9w8QC6XYqJNc1+46VspG2SglrGwsrKQsLJSSvL5PPTJ3cOadH++Peeep70Yz7/t8OnPOmHfenBAil6UYKUz8k5LLSgF7QskK9of4qOEsgI884CPXsUPicw25DD74AnzgKnZAfF8DLoL3aoD3XMP2i+Dqdwm8KwHedQXbg7xKgOmYHhfAFSFflbRjO5GXEGA6tjPN4A0RvjbSii0hzxHAdE4pjeBVEb1W04ZtRZ5igOnc1jSBl0T8WkoLtgV5TABMY7TYBGtA+pBxpIxsIsfIvUiu7nnMTZ5jnOdsUIUq8L10BJlF1pBD5EbyvydV9co9HHJPs9wj9VqQgbXRcgsyhawgVeQq4m3FdD1z71W2TLGt7R27I7JTOwQuIvsZwJKx+P4pu47+wHq+x0VHL++/n7AedD3yxyEsWeqDfrFdQQdjHULLYx1Ah8emGB0d60NvZwLrQeeRdYux1Fs+6QcJW9HJYy1Gq8NaiFaPtQitD+tbhjVVJRNLPCMGwb9MgOcNgudtf0mWdFVMgE8Ngk91Y/MJrT3HWbPO6wR3WHAf7tAJHrUAPKoTXLYAXNYJ3rIAvKUTfGYB+EwXlhYE4rz7vUWmObcxxnlK7IE/ANwVscEHZAFp9IzVyH97iDhmlw7wWIRPYhlprjFmMx8T9soZ0wFelGyGtiDRe932EGO38zmyW50WdYBlVjH/iRi76nBuL48RuHCnA3xZowHa7T6Y4FyD4v8d9P66UI2lHQFfvSQ/V/mMSmPzHP6iXgoqwd2+Ca+RSaROw5VVx3Nd+3roVjnpBE9yh8x8+xpSLbzIc99xLxMqJ5tDfiNNFuwiauJe5sKemKm8AbeOQDtQi8ImAAAAAElFTkSuQmCC) center no-repeat;
+        background-size: 50px;
+        transition: background-size 0.6s cubic-bezier(.87,-.41,.19,1.44), opacity 0.5s ease 0.3s;
+        }
+
+        #sticker.revealed .front {
+        background-size: 250%;
+        opacity: 0;
+        }
 
     </style>
 
@@ -254,8 +280,11 @@
             integrity="sha512-95iy0RZIbw3H/FgfAj2wnCQJlzFQ+eaSfUeV/l8WVyGHKSRMzm3M/O+85j9ba/HFphkijrCTDjcuDX0BL2lthA=="
             crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
+
 {% block page_body %}
-    {% if 'original_user' in session %}
+
+<div id="sticker">
+    <div class="reveal">{% if 'original_user' in session %}
         <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
             <div class="navbar-header">
                 <a class="navbar-brand">Viewing website as: {{ current_user.discord_username }}</a>
@@ -288,6 +317,16 @@
             {% endfor %}
         </ul>
     </div>
+</div>
+    <div class="front"></div>
+</div>
+
+    <script>
+        let x = document.getElementById('sticker');
+        setTimeout(function(){
+            x.classList.toggle('revealed')
+        },500)
+    </script>
 
 {% endblock %}
 
