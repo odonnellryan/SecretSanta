@@ -257,6 +257,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"
             integrity="sha512-95iy0RZIbw3H/FgfAj2wnCQJlzFQ+eaSfUeV/l8WVyGHKSRMzm3M/O+85j9ba/HFphkijrCTDjcuDX0BL2lthA=="
             crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"
+            integrity="sha512-E8QSvWZ0eCLGk4km3hxSsNmGWbLtSCSUcewDQPQWZF6pEU8GlT8a5fF32wOl1i8ftdMhssTrF/OhyGWwonTcXA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
 {% block page_body %}
     {% if 'original_user' in session %}
@@ -268,8 +272,6 @@
                 </form>
             </div>
         </nav>
-        <script src="/static/js/snow.js"></script>
-
 
     {% endif %}
 
@@ -363,26 +365,30 @@
     <script>
 
         function decryptDataWithPrivateKeyPW(encryptedData, privateKey, password) {
+            const decryptedPk = decryptStringWithPassword(password, privateKey);
             const privateKeyPem = forge.pki.privateKeyFromPem(
-                privateKey,
-                password
+                decryptedPk
             );
             const decodedData = forge.util.decode64(encryptedData);
             const decipher = forge.pki.rsa.decrypt(decodedData, privateKeyPem);
             return decipher.toString('utf8');
         }
 
+        function decryptStringWithPassword(password, encrypted) {
+            const decryptedBytes = CryptoJS.AES.decrypt(encrypted, password);
+            return decryptedBytes.toString(CryptoJS.enc.Utf8);
+        }
+
+        function encryptStringWithPassword(password, plaintext) {
+            const encryptedBytes = CryptoJS.AES.encrypt(plaintext, password);
+            return encryptedBytes.toString();
+        }
+
         function getKeyPair(password) {
             const rsaKeyPair = forge.pki.rsa.generateKeyPair(2048);
-
-            const privateKeyPem = forge.pki.privateKeyToPem(
-                rsaKeyPair.privateKey,
-                password
-            );
-
+            const privateKeyPem = forge.pki.privateKeyToPem(rsaKeyPair.privateKey);
             const publicKeyPem = forge.pki.publicKeyToPem(rsaKeyPair.publicKey);
-
-            return [privateKeyPem, publicKeyPem]
+            return [encryptStringWithPassword(password, privateKeyPem), publicKeyPem]
         }
 
         function encryptDataWithPublicKey(dataToEncrypt, publicKeyPem) {
@@ -397,8 +403,7 @@
         let publicKey = `{{ session['public_key'] }}`;
 
         if (!privateKey) {
-            console.log("Generating new key pair. ")
-            let publicPrivateKey = getKeyPair();
+            let publicPrivateKey = getKeyPair(discordUserId);
             privateKey = publicPrivateKey[0];
             publicKey = publicPrivateKey[1];
             let data = {
@@ -451,8 +456,9 @@
                 body: JSON.stringify(data),
             }).then((response) => {
                 if (!response.ok) {
-                    alert("Not good. Contact ross() on discord. ")
+                    alert("Not good. Contact ross() on discord. ");
                 } else {
+                    alert("Preferences Saved. This is what you get. ");
                     $("#commentContainer").toggle();
                 }
             })

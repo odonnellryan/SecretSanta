@@ -1,6 +1,8 @@
 import os
 from collections import defaultdict
 import random
+from copy import copy
+
 from flask import Flask, redirect, url_for, request, flash, session
 from flask_admin import Admin, expose, BaseView, AdminIndexView
 from flask_admin.contrib.peewee import ModelView
@@ -123,6 +125,8 @@ def get_first_santa(users):
 
 
 def create_matches(users):
+    if not users:
+        return
     first_user = users[0]
 
     counter = 0
@@ -176,7 +180,7 @@ def match_users(should_create=False):
         .where(Match.secret_santa.is_null())
     )
 
-    users_with_valid_matches = list(
+    users_with_available_matches = list(
         User
         .select(User, fn.COUNT(Match.match).alias('match_count'))
         .join(Match, JOIN.LEFT_OUTER, on=(User.id == Match.secret_santa))
@@ -185,25 +189,76 @@ def match_users(should_create=False):
         .where(User.id.not_in(users_without_secret_santa))
     )
 
-    users = users_with_valid_matches + users_without_secret_santa
+    users = users_with_available_matches
 
     random.shuffle(users)
 
     users_by_country = defaultdict(list)
-    user_pool, int_pool = get_user_pools(users)
 
-    for user in user_pool:
+    # user_pool,  = get_user_pools(users_without_secret_santa)
+    santa_user_pool, santa_int_pool = get_user_pools(users_with_available_matches)
+
+    for user in users_without_secret_santa:
         users_by_country[user.country].append(user)
 
     for country in users_by_country:
-        if len(users_by_country[country]) < 2 and int_pool:
-            users_by_country[country].append(int_pool.pop())
+        if len(users_by_country[country]) < 2 and santa_int_pool:
+            users_by_country[country].append(santa_int_pool.pop())
 
-    for user in int_pool:
-        if len(int_pool) == len(users):
-            users_by_country['int'].append(user)
-        else:
-            users_by_country[user.country].append(user)
+    for santa in santa_user_pool:
+        if santa.country in users_by_country:
+            users_by_country[santa.country].append(santa)
+
+    def grab_int_user_from_list(users_by_country):
+        ucc = copy(users_by_country)
+
+        for country, user_list in ucc.items():
+            if len(user_list) == 1 and user_list[0].ship_internationally:
+                del users_by_country[country]
+                return user_list[0]
+
+        for country, user_list in ucc.items():
+            if len(user_list) > 2:
+                for user in user_list:
+                    if user.ship_internationally:
+                        users_by_country[country].remove(user)
+                        return user
+
+    def do_the_shuffle(users_by_country):
+
+        countries_with_all_local_only = set()
+
+        for country, user_list in users_by_country.items():
+            if all([not u.ship_internationally for u in user_list]):
+                countries_with_all_local_only.add(country)
+
+        for country in countries_with_all_local_only:
+            add_user = grab_int_user_from_list(users_by_country)
+            users_by_country[country].append(add_user)
+
+        bump_int_users = []
+
+        for i, items in enumerate(users_by_country.items()):
+            country, user_list = items
+            if len(user_list) == 1:
+                if bump_int_users:
+                    if i == len(users_by_country.keys()):
+                        user_list.append(bump_int_users.pop())
+                    else:
+                        user_list.append(bump_int_users.pop())
+                else:
+                    if user_list[0].ship_internationally:
+                        if i == len(users_by_country.keys()):
+                            users_by_country[list(users_by_country.keys())[0]].append(user_list.pop())
+                        else:
+                            bump_int_users.append(user_list.pop())
+
+        if bump_int_users:
+            for country, user_list in users_by_country.items():
+                if user_list:
+                    user_list.extend(bump_int_users)
+
+    do_the_shuffle(users_by_country)
 
     for user_list in users_by_country.values():
         if should_create:

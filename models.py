@@ -40,7 +40,7 @@ class User(flask_db.Model, UserMixin):
     gift_comments = CharField(null=True)
 
     country = CharField(null=True, choices=[(c, c) for c in AVAILABLE_COUNTRIES])
-    ship_internationally = BooleanField(default=True)
+    ship_internationally = BooleanField(default=False)
 
     max_match_count = IntegerField(default=1)
 
