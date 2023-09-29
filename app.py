@@ -37,7 +37,7 @@ def users_without_secret_santa_exist():
         # we don't want to trigger this if matching has not yet been performed
         return False
     for user in users:
-        if not user.secret_santa:
+        if not user.secret_santa and user.country and user.public_key:
             return True
     return False
 
