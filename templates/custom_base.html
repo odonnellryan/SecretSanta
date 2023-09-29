@@ -399,8 +399,8 @@
         }
 
         const discordUserId = `{{ session['user_id'] }}`;
-        let privateKey = `{{ session['private_key'] }}`;
-        let publicKey = `{{ session['public_key'] }}`;
+        let privateKey = `{{ private_key }}`;
+        let publicKey = `{{ public_key }}`;
 
         if (!privateKey) {
             let publicPrivateKey = getKeyPair(discordUserId);

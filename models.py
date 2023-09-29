@@ -49,6 +49,16 @@ class User(flask_db.Model, UserMixin):
             return self.gift_comments
         return ""
 
+    def get_private_key(self):
+        if self.private_key:
+            return self.private_key
+        return ""
+
+    def get_public_key(self):
+        if self.public_key:
+            return self.public_key
+        return ""
+
     @property
     def secret_santa_public_key(self):
         try:

@@ -53,8 +53,12 @@ def inject_variables():
     file_list.remove(default_song)
 
     gift_comments = ""
+    public_key = ""
+    private_key = ""
 
     if current_user.is_authenticated:
+        public_key = current_user.get_public_key()
+        private_key = current_user.get_private_key()
         gift_comments = current_user.get_gift_comments()
 
     return {
@@ -62,7 +66,9 @@ def inject_variables():
         'songs': file_list,
         'users_without_secret_santa_exist': users_without_secret_santa_exist(),
         'gift_comments': gift_comments,
-        'matches_exist': len(Match.select())
+        'matches_exist': len(Match.select()),
+        'public_key': public_key,
+        'private_key': private_key
     }
 
 
@@ -177,7 +183,7 @@ def match_users(should_create=False):
         User
         .select()
         .join(Match, JOIN.LEFT_OUTER, on=(User.id == Match.match))
-        .where(Match.secret_santa.is_null())
+        .where(Match.secret_santa.is_null(), User.public_key.is_null(False), User.country.is_null(False))
     )
 
     users_with_available_matches = list(
@@ -186,17 +192,24 @@ def match_users(should_create=False):
         .join(Match, JOIN.LEFT_OUTER, on=(User.id == Match.secret_santa))
         .group_by(User)
         .having((fn.COUNT(Match.match) < User.max_match_count) | User.max_match_count.is_null())
-        .where(User.id.not_in(users_without_secret_santa))
+        .where(User.id.not_in(users_without_secret_santa), User.public_key.is_null(False), User.country.is_null(False))
     )
-
-    users = users_with_available_matches
-
-    random.shuffle(users)
 
     users_by_country = defaultdict(list)
 
     # user_pool,  = get_user_pools(users_without_secret_santa)
     santa_user_pool, santa_int_pool = get_user_pools(users_with_available_matches)
+
+    if not santa_int_pool:
+
+        for user in copy(users_without_secret_santa):
+
+            if user.ship_internationally and user.n_recipients < user.max_match_count:
+                santa_int_pool.append(user)
+                users_without_secret_santa.remove(user)
+
+            if len(santa_int_pool) > 5:
+                break
 
     for user in users_without_secret_santa:
         users_by_country[user.country].append(user)
@@ -208,6 +221,9 @@ def match_users(should_create=False):
     for santa in santa_user_pool:
         if santa.country in users_by_country:
             users_by_country[santa.country].append(santa)
+
+    for santa in santa_int_pool:
+        users_by_country[santa.country].append(santa)
 
     def grab_int_user_from_list(users_by_country):
         ucc = copy(users_by_country)
@@ -234,7 +250,8 @@ def match_users(should_create=False):
 
         for country in countries_with_all_local_only:
             add_user = grab_int_user_from_list(users_by_country)
-            users_by_country[country].append(add_user)
+            if add_user:
+                users_by_country[country].append(add_user)
 
         bump_int_users = []
 
@@ -333,11 +350,13 @@ class UserView(ModelView):
         'impersonate': _impersonate,
         'recipients': lambda v, c, m, n: str([str(r) for r in m.recipients]),
         'address_for_secret_santa': lambda v, c, m, n: bool(m.address_for_secret_santa),
+        'has_public_key': lambda v, c, m, n: bool(m.public_key),
+        'has_private_key': lambda v, c, m, n: bool(m.private_key),
     }
 
     column_list = (
         'discord_username', 'secret_santa', 'recipients', 'address_for_secret_santa', 'received_gift', 'created',
-        'is_admin', 'impersonate')
+        'is_admin', 'impersonate', 'has_public_key', 'has_private_key', 'ship_internationally')
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.is_admin
