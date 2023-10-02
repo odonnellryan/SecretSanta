@@ -1,16 +1,14 @@
 import os
-from collections import defaultdict
 import random
-from copy import copy
+from typing import List, Dict
 
+import requests
 from flask import Flask, redirect, url_for, request, session
 from flask_admin import Admin, expose, BaseView, AdminIndexView
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.menu import MenuLink
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
-import requests
 from markupsafe import Markup
-from peewee import JOIN, fn
 
 import config
 from models import initialize_database, User, Match
@@ -27,17 +25,21 @@ app.config['FLASK_ADMIN_SWATCH'] = 'superhero'
 initialize_database(app)
 
 
-# initialize_database(app)
+def get_users_without_secret_santa():
+    users = User.select()
+    matches = Match.select()
+
+    if not matches:
+        yield None
+
+    for user in users:
+        if not user.secret_santa and user.country and user.public_key:
+            yield user
 
 
 def users_without_secret_santa_exist():
-    users = User.select()
-    matches = Match.select()
-    if not matches:
-        # we don't want to trigger this if matching has not yet been performed
-        return False
-    for user in users:
-        if not user.secret_santa and user.country and user.public_key:
+    for u in get_users_without_secret_santa():
+        if u:
             return True
     return False
 
@@ -115,172 +117,130 @@ class LoginView(BaseView):
         return self.render('login.html')
 
 
-def get_first_user_without_santa(users, santa):
-    for user in users:
-        if user.secret_santa:
-            continue
-        if user.id == santa.id:
-            continue
-        return user
+class CountryGroup:
+
+    def __init__(self, user: User):
+        self.country: str = user.country
+        self.users: List[User] = [user]
+
+    def add_user(self, user: User):
+        self.users.append(user)
+
+    def __len__(self):
+        return len(self.users)
+
+    def n_available_santas(self):
+        return len([u for u in self.users if u and u.is_eligible_for_ss()])
+
+    def get_first_avail_secret_santa(self, international=False):
+        for u in self.users:
+            if not u:
+                continue
+            if international and not u.ship_internationally:
+                continue
+            if u.is_eligible_for_ss():
+                return u
 
 
-def get_first_santa(users):
-    for santa in users:
-        if not santa.n_recipients >= santa.max_match_count:
-            return santa
+class UserGroup:
+
+    def __init__(self, users: List[User]):
+        self.users = users
+        self.countries: Dict[str, CountryGroup] = {}
+
+        for user in self.users:
+            if not user.eligible_for_participation():
+                continue
+            if user.country in self.countries:
+                self.countries[user.country].add_user(user)
+            else:
+                self.countries[user.country] = CountryGroup(user)
+
+    def get_first_avail_secret_santa(self, country, user=None, international=False, remove=True):
+
+        n_avail_santas = 0
+        if country in self.countries:
+            n_avail_santas = self.countries[country].n_available_santas()
+
+        if n_avail_santas > 2 or n_avail_santas == 1:
+            ss = self.countries[country].get_first_avail_secret_santa(international=international)
+            if remove:
+                self.countries[country].users.remove(ss)
+            return ss
+
+        for cg in sorted(self.countries.values(), key=lambda c: c.n_available_santas()):
+            ss = cg.get_first_avail_secret_santa(international=international)
+            if ss:
+                if user:
+                    if user.id == ss.id:
+                        continue
+                if remove:
+                    cg.users.remove(ss)
+                return ss
+
+    def consolidate_countries(self):
+        pass
 
 
-def create_matches(users):
-    if not users:
+def create_matches(country_group: CountryGroup):
+    if not country_group:
         return
-    first_user = users[0]
 
-    counter = 0
+    ss = country_group.get_first_avail_secret_santa()
+    if ss is None:
+        return
+    first_user = ss
+    for recipient in country_group.users:
 
-    for i, recipient in enumerate(users):
+        if ss and ss.can_be_secret_santa(recipient):
+            Match.create(secret_santa=ss, match=recipient)
+            ss = recipient
 
-        if recipient.secret_santa:
-            continue
-
-        if i > counter:
-            counter = i
-
-        try:
-            secret_santa = users[counter + 1]
-            while (secret_santa.n_recipients >= secret_santa.max_match_count) and \
-                    (secret_santa.ship_internationally or (secret_santa.country == recipient.country)) \
-                    and (secret_santa.id != recipient.id):
-                counter += 1
-                secret_santa = users[counter + 1]
-
-        except IndexError:
-            secret_santa = first_user
-
-        if secret_santa.id != recipient.id and (
-                secret_santa.ship_internationally or (secret_santa.country == recipient.country)):
-            Match.create(secret_santa=secret_santa, match=recipient)
+    if ss.can_be_secret_santa(first_user):
+        Match.create(secret_santa=ss, match=first_user)
 
 
-def get_first_int_user(user_list, pulled_users):
-    for user in user_list:
-        if user.ship_internationally and user not in pulled_users:
-            return user
+def match_users():
+    iu = list(User.select().where(User.ship_internationally == True))
+    random.shuffle(iu)
+    niu = list(User.select().where(User.ship_internationally == False))
+    random.shuffle(niu)
+    int_users = UserGroup(iu)
+    non_int_users = UserGroup(niu)
 
+    for country in non_int_users.countries.values():
+        if len(country.users) < 2:
+            ss = int_users.get_first_avail_secret_santa(country.country)
+            if ss:
+                country.users.append(ss)
 
-def get_user_pools(user_list):
-    user_pool = []
-    int_pool = []
-    for user in user_list:
-        if user.ship_internationally:
-            int_pool.append(user)
-        else:
-            user_pool.append(user)
+    for country in sorted(int_users.countries.values(), key=lambda c: len(c)):
+        for user in country.users:
+            if country.country in non_int_users.countries:
+                non_int_users.countries[country.country].add_user(user)
+            else:
+                non_int_users.countries[country.country] = CountryGroup(user)
+        country.users = []
 
-    return user_pool + int_pool[5:], int_pool[:5]
+    for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
+        if len(country) == 1:
+            ss = non_int_users.get_first_avail_secret_santa(None, country.users[0])
+            non_int_users.countries[country.country].add_user(ss)
 
+    for country in non_int_users.countries.values():
+        create_matches(country)
 
-def match_users(should_create=False):
-    users_without_secret_santa = list(
-        User
-        .select()
-        .join(Match, JOIN.LEFT_OUTER, on=(User.id == Match.match))
-        .where(Match.secret_santa.is_null(), User.public_key.is_null(False), User.country.is_null(False))
-    )
+    users_without_ss = list(get_users_without_secret_santa())
 
-    users_with_available_matches = list(
-        User
-        .select(User, fn.COUNT(Match.match).alias('match_count'))
-        .join(Match, JOIN.LEFT_OUTER, on=(User.id == Match.secret_santa))
-        .group_by(User)
-        .having((fn.COUNT(Match.match) < User.max_match_count) | User.max_match_count.is_null())
-        .where(User.id.not_in(users_without_secret_santa), User.public_key.is_null(False), User.country.is_null(False))
-    )
-
-    users_by_country = defaultdict(list)
-
-    # user_pool,  = get_user_pools(users_without_secret_santa)
-    santa_user_pool, santa_int_pool = get_user_pools(users_with_available_matches)
-
-    if not santa_int_pool:
-
-        for user in copy(users_without_secret_santa):
-
-            if user.ship_internationally and user.n_recipients < user.max_match_count:
-                santa_int_pool.append(user)
-                users_without_secret_santa.remove(user)
-
-            if len(santa_int_pool) > 5:
-                break
-
-    for user in users_without_secret_santa:
-        users_by_country[user.country].append(user)
-
-    for country in users_by_country:
-        if len(users_by_country[country]) < 2 and santa_int_pool:
-            users_by_country[country].append(santa_int_pool.pop())
-
-    for santa in santa_user_pool:
-        if santa.country in users_by_country:
-            users_by_country[santa.country].append(santa)
-
-    for santa in santa_int_pool:
-        users_by_country[santa.country].append(santa)
-
-    def grab_int_user_from_list(users_by_country):
-        ucc = copy(users_by_country)
-
-        for country, user_list in ucc.items():
-            if len(user_list) == 1 and user_list[0].ship_internationally:
-                del users_by_country[country]
-                return user_list[0]
-
-        for country, user_list in ucc.items():
-            if len(user_list) > 2:
-                for user in user_list:
-                    if user.ship_internationally:
-                        users_by_country[country].remove(user)
-                        return user
-
-    def do_the_shuffle(users_by_country):
-
-        countries_with_all_local_only = set()
-
-        for country, user_list in users_by_country.items():
-            if all([not u.ship_internationally for u in user_list]):
-                countries_with_all_local_only.add(country)
-
-        for country in countries_with_all_local_only:
-            add_user = grab_int_user_from_list(users_by_country)
-            if add_user:
-                users_by_country[country].append(add_user)
-
-        bump_int_users = []
-
-        for i, items in enumerate(users_by_country.items()):
-            country, user_list = items
-            if len(user_list) == 1:
-                if bump_int_users:
-                    if i == len(users_by_country.keys()):
-                        user_list.append(bump_int_users.pop())
-                    else:
-                        user_list.append(bump_int_users.pop())
-                else:
-                    if user_list[0].ship_internationally:
-                        if i == len(users_by_country.keys()):
-                            users_by_country[list(users_by_country.keys())[0]].append(user_list.pop())
-                        else:
-                            bump_int_users.append(user_list.pop())
-
-        if bump_int_users:
-            for country, user_list in users_by_country.items():
-                if user_list:
-                    user_list.extend(bump_int_users)
-
-    do_the_shuffle(users_by_country)
-
-    for user_list in users_by_country.values():
-        if should_create:
-            create_matches(user_list)
+    for u in users_without_ss:
+        ss = non_int_users.get_first_avail_secret_santa(None, international=True)
+        if ss is None:
+            return
+        while not ss.can_be_secret_santa(u):
+            ss = non_int_users.get_first_avail_secret_santa(None, international=True)
+            if ss is None:
+                return
+        Match.create(secret_santa=ss, match=u)
 
 
 class Matching(BaseView):
@@ -297,7 +257,7 @@ class Matching(BaseView):
 
     @expose('/create-matches')
     def create_matches(self):
-        match_users(should_create=True)
+        match_users()
         return redirect(url_for('matching.index'))
 
 
@@ -404,7 +364,7 @@ def increase_potential():
     if users_without_secret_santa_exist():
         current_user.max_match_count = current_user.max_match_count + 1
         current_user.save()
-        match_users(should_create=True)
+        match_users()
     return redirect(url_for('admin.index'))
 
 

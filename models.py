@@ -11,7 +11,39 @@ DATABASE = 'secret_santa.db'
 db = SqliteDatabase(DATABASE)
 flask_db = FlaskDB(database=db)
 
-country_list = ["EU"] + [c.name for c in countries]
+EU = "European Union"
+
+country_list = [EU] + [c.name for c in countries]
+
+EU_COUNTRIES = [
+    "Austria",
+    "Belgium",
+    "Bulgaria",
+    "Croatia",
+    "Cyprus",
+    "Czechia",
+    "Denmark",
+    "Estonia",
+    "Finland",
+    "France",
+    "Germany",
+    "Greece",
+    "Hungary",
+    "Ireland",
+    "Italy",
+    "Latvia",
+    "Lithuania",
+    "Luxembourg",
+    "Malta",
+    "Netherlands",
+    "Poland",
+    "Portugal",
+    "Romania",
+    "Slovakia",
+    "Slovenia",
+    "Spain",
+    "Sweden"
+]
 
 
 class JSONField(TextField):
@@ -43,6 +75,18 @@ class User(flask_db.Model, UserMixin):
     ship_internationally = BooleanField(default=False)
 
     max_match_count = IntegerField(default=1)
+
+    def eligible_for_participation(self):
+        return self.country and self.public_key
+
+    def is_eligible_for_ss(self):
+        return self.n_recipients < self.max_match_count and self.public_key and self.country
+
+    def can_be_secret_santa(self, recipient: 'User'):
+        return recipient is not None and not recipient.secret_santa and self.is_eligible_for_ss() and \
+               (self.ship_internationally or (self.country == recipient.country) or (
+                       self.country == EU and (recipient.country == EU or recipient.country in EU_COUNTRIES))) \
+               and (self.id != recipient.id)
 
     def get_gift_comments(self):
         if self.gift_comments:
