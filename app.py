@@ -3,7 +3,7 @@ from collections import defaultdict
 import random
 from copy import copy
 
-from flask import Flask, redirect, url_for, request, flash, session
+from flask import Flask, redirect, url_for, request, session
 from flask_admin import Admin, expose, BaseView, AdminIndexView
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.menu import MenuLink
@@ -156,7 +156,8 @@ def create_matches(users):
         except IndexError:
             secret_santa = first_user
 
-        if secret_santa.id != recipient.id:
+        if secret_santa.id != recipient.id and (
+                secret_santa.ship_internationally or (secret_santa.country == recipient.country)):
             Match.create(secret_santa=secret_santa, match=recipient)
 
 

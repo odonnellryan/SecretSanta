@@ -11,7 +11,7 @@ DATABASE = 'secret_santa.db'
 db = SqliteDatabase(DATABASE)
 flask_db = FlaskDB(database=db)
 
-country_list = [c.name for c in countries]
+country_list = ["EU"] + [c.name for c in countries]
 
 
 class JSONField(TextField):
