@@ -298,6 +298,8 @@ class MyModelView(ModelView):
 
 class UserView(ModelView):
 
+    can_delete = False
+
     def _impersonate(view, context, model, name):
         _html = f'''
             <a href="{url_for('user.impersonate', user_id=model.id)}">
