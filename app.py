@@ -27,10 +27,10 @@ initialize_database(app)
 
 def get_users_without_secret_santa():
     users = User.select()
-    matches = Match.select()
+    matches = list(Match.select())
 
     if not matches:
-        yield None
+        return [None]
 
     for user in users:
         if not user.secret_santa and user.country and user.public_key:
