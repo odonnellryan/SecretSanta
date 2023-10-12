@@ -299,6 +299,26 @@
 
 {% block tail %}
     <script>
+        var titleScrollInterval;
+
+        function updateAndScrollTitle(songTitle) {
+            if (titleScrollInterval) {
+                clearInterval(titleScrollInterval);
+            }
+            // Update title and start scrolling
+            document.title = songTitle;
+            var titleLength = songTitle.length;
+            var position = 0;
+
+            // Scroll title if length exceeds 20 characters
+            if (titleLength > 20) {
+                titleScrollInterval = setInterval(function () {
+                    document.title = songTitle.substring(position, titleLength) + " - " + songTitle.substring(0, position);
+                    position = (position + 1) % titleLength;
+                }, 400);
+            }
+        }
+
         $(document).ready(function () {
             var audio;
             var playlist;
@@ -358,6 +378,9 @@
                 par = link.parent();
                 par.addClass('active').siblings().removeClass('active');
                 audio[0].load();
+
+                updateAndScrollTitle(link.text());
+
             }
         })
 
