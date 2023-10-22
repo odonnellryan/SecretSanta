@@ -38,7 +38,8 @@ def get_users_without_secret_santa():
 
 
 def users_without_secret_santa_exist():
-    for u in get_users_without_secret_santa():
+    users = list(get_users_without_secret_santa())
+    for u in users:
         if u:
             return True
     return False
@@ -123,6 +124,12 @@ class CountryGroup:
         self.country: str = user.country
         self.users: List[User] = [user]
 
+    def has_odd_match_count(self):
+        # should return true if there is only ONE user who's not i
+        check_non_country = [u for u in self.users if u.country != self.country]
+        check_is_c_is_int = [u for u in self.users if u.country == self.country and u.ship_internationally]
+        return len(check_non_country) == 1 and  len(check_is_c_is_int) == 1
+
     def add_user(self, user: User):
         self.users.append(user)
 
@@ -168,7 +175,9 @@ class UserGroup:
                 self.countries[country].users.remove(ss)
             return ss
 
-        for cg in sorted(self.countries.values(), key=lambda c: c.n_available_santas()):
+        for cg in sorted(self.countries.values(), key=lambda c: c.n_available_santas(), reverse=True):
+            if cg.n_available_santas() == 2:
+                continue
             ss = cg.get_first_avail_secret_santa(international=international)
             if ss:
                 if user:
@@ -200,6 +209,16 @@ def create_matches(country_group: CountryGroup):
         Match.create(secret_santa=ss, match=first_user)
 
 
+def match_users_for_tiny_tims():
+    users_who_can_be_santa = [u for u in User.select() if u.is_eligible_for_ss()]
+    users_without_secret_santas = get_users_without_secret_santa()
+    for recipient in users_without_secret_santas:
+        random.shuffle(users_who_can_be_santa)
+        for santa in users_who_can_be_santa:
+            if santa.can_be_secret_santa(recipient):
+                Match.create(secret_santa=santa, match=recipient)
+
+
 def match_users():
     iu = list(User.select().where(User.ship_internationally == True))
     random.shuffle(iu)
@@ -209,7 +228,7 @@ def match_users():
     non_int_users = UserGroup(niu)
 
     for country in non_int_users.countries.values():
-        if len(country.users) < 2:
+        if len(country.users) < 2 or country.has_odd_match_count():
             ss = int_users.get_first_avail_secret_santa(country.country)
             if ss:
                 country.users.append(ss)
@@ -222,24 +241,28 @@ def match_users():
                 non_int_users.countries[country.country] = CountryGroup(user)
         country.users = []
 
+    # tracked_users =
+
     for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
-        if len(country) == 1:
+        if len(country) == 1 or country.has_odd_match_count():
             ss = non_int_users.get_first_avail_secret_santa(None, country.users[0])
             non_int_users.countries[country.country].add_user(ss)
 
-    for country in non_int_users.countries.values():
+    for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
         create_matches(country)
 
     users_without_ss = list(get_users_without_secret_santa())
 
+    int_users = UserGroup(iu)
+
     for u in users_without_ss:
-        ss = non_int_users.get_first_avail_secret_santa(None, international=True)
+        ss = int_users.get_first_avail_secret_santa(None, international=True, user=u)
         if ss is None:
-            return
+            continue
         while not ss.can_be_secret_santa(u):
-            ss = non_int_users.get_first_avail_secret_santa(None, international=True)
+            ss = non_int_users.get_first_avail_secret_santa(None, international=True, user=u)
             if ss is None:
-                return
+                continue
         Match.create(secret_santa=ss, match=u)
 
 
@@ -366,7 +389,7 @@ def increase_potential():
     if users_without_secret_santa_exist():
         current_user.max_match_count = current_user.max_match_count + 1
         current_user.save()
-        match_users()
+        match_users_for_tiny_tims()
     return redirect(url_for('admin.index'))
 
 
