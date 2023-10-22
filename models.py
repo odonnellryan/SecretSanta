@@ -85,7 +85,7 @@ class User(flask_db.Model, UserMixin):
     def can_be_secret_santa(self, recipient: 'User'):
         return recipient is not None and not recipient.secret_santa and self.is_eligible_for_ss() and \
                (self.ship_internationally or (self.country == recipient.country) or (
-                       self.country == EU and (recipient.country == EU or recipient.country in EU_COUNTRIES))) \
+                       self.country == EU and (recipient.country in EU_COUNTRIES))) \
                and (self.id != recipient.id)
 
     def get_gift_comments(self):

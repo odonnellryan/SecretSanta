@@ -1,3 +1,4 @@
+import copy
 import os
 import random
 from typing import List, Dict
@@ -11,7 +12,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from markupsafe import Markup
 
 import config
-from models import initialize_database, User, Match
+from models import initialize_database, User, Match, EU, EU_COUNTRIES
 
 app = Flask(__name__)
 
@@ -125,10 +126,10 @@ class CountryGroup:
         self.users: List[User] = [user]
 
     def has_odd_match_count(self):
-        # should return true if there is only ONE user who's not i
-        check_non_country = [u for u in self.users if u.country != self.country]
-        check_is_c_is_int = [u for u in self.users if u.country == self.country and u.ship_internationally]
-        return len(check_non_country) == 1 and  len(check_is_c_is_int) == 1
+        # the group of users needs int' users on either end
+        check_non_country = len([u for u in self.users if u.country != self.country])
+        check_non_int = len([u for u in self.users if u.ship_internationally and u.country == self.country])
+        return check_non_country >= 1 and check_non_country + check_non_int == 1
 
     def add_user(self, user: User):
         self.users.append(user)
@@ -139,8 +140,10 @@ class CountryGroup:
     def n_available_santas(self):
         return len([u for u in self.users if u and u.is_eligible_for_ss()])
 
-    def get_first_avail_secret_santa(self, international=False):
-        for u in self.users:
+    def get_first_avail_secret_santa(self, international=False, users=None):
+        if users is None:
+            users = self.users
+        for u in users:
             if not u:
                 continue
             if international and not u.ship_internationally:
@@ -163,14 +166,14 @@ class UserGroup:
             else:
                 self.countries[user.country] = CountryGroup(user)
 
-    def get_first_avail_secret_santa(self, country, user=None, international=False, remove=True):
+    def get_first_avail_secret_santa(self, country, user=None, remove=True, international=True):
 
         n_avail_santas = 0
         if country in self.countries:
             n_avail_santas = self.countries[country].n_available_santas()
 
-        if n_avail_santas > 2 or n_avail_santas == 1:
-            ss = self.countries[country].get_first_avail_secret_santa(international=international)
+        if n_avail_santas:
+            ss = self.countries[country].get_first_avail_secret_santa()
             if remove:
                 self.countries[country].users.remove(ss)
             return ss
@@ -192,14 +195,21 @@ class UserGroup:
 
 
 def create_matches(country_group: CountryGroup):
+    int_users = [u for u in country_group.users if u.ship_internationally and u.is_eligible_for_ss()]
+    non_int_users = [u for u in country_group.users if not u.ship_internationally and u.is_eligible_for_ss()]
+
+    user_list = int_users[:len(int_users) // 2] + non_int_users + int_users[len(int_users) // 2:]
+
     if not country_group:
         return
 
-    ss = country_group.get_first_avail_secret_santa()
+    ss = country_group.get_first_avail_secret_santa(users=user_list)
+
     if ss is None:
         return
+
     first_user = ss
-    for recipient in country_group.users:
+    for recipient in user_list:
 
         if ss and ss.can_be_secret_santa(recipient):
             Match.create(secret_santa=ss, match=recipient)
@@ -227,11 +237,11 @@ def match_users():
     int_users = UserGroup(iu)
     non_int_users = UserGroup(niu)
 
-    for country in non_int_users.countries.values():
-        if len(country.users) < 2 or country.has_odd_match_count():
-            ss = int_users.get_first_avail_secret_santa(country.country)
-            if ss:
-                country.users.append(ss)
+    # for country in non_int_users.countries.values():
+    #     if len(country.users) < 2:
+    #         ss = int_users.get_first_avail_secret_santa(country.country, international=False)
+    #         if ss:
+    #             country.users.append(ss)
 
     for country in sorted(int_users.countries.values(), key=lambda c: len(c)):
         for user in country.users:
@@ -241,26 +251,38 @@ def match_users():
                 non_int_users.countries[country.country] = CountryGroup(user)
         country.users = []
 
-    # tracked_users =
+    # handle the EU first: drop all int'l EU people int the EU if there aren't enough people in the EU
+
+    eu_group = non_int_users.countries[EU]
+
+    while len(eu_group) < 2 or eu_group.has_odd_match_count():
+        for country_name, country in non_int_users.countries.items():
+            if country_name in EU_COUNTRIES:
+                if len(country) < 2:
+                    usrs = copy.copy(country.users)
+                    for user in usrs:
+                        if user.ship_internationally:
+                            eu_group.add_user(user)
+                            country.users.remove(user)
+        break
 
     for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
-        if len(country) == 1 or country.has_odd_match_count():
-            ss = non_int_users.get_first_avail_secret_santa(None, country.users[0])
-            non_int_users.countries[country.country].add_user(ss)
+        if len(country) == 1 or country.has_odd_match_count() and not country.country == EU:
+            ss = non_int_users.get_first_avail_secret_santa(None, user=country.users[0])
+            if ss is not None:
+                non_int_users.countries[country.country].add_user(ss)
 
     for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
         create_matches(country)
 
-    users_without_ss = list(get_users_without_secret_santa())
-
     int_users = UserGroup(iu)
 
-    for u in users_without_ss:
-        ss = int_users.get_first_avail_secret_santa(None, international=True, user=u)
+    for u in get_users_without_secret_santa():
+        ss = int_users.get_first_avail_secret_santa(None, user=u)
         if ss is None:
             continue
         while not ss.can_be_secret_santa(u):
-            ss = non_int_users.get_first_avail_secret_santa(None, international=True, user=u)
+            ss = non_int_users.get_first_avail_secret_santa(None, user=u)
             if ss is None:
                 continue
         Match.create(secret_santa=ss, match=u)
