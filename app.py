@@ -405,6 +405,26 @@ def load_user(user_id):
     return user
 
 
+@app.route('/mark-shipped/<recipient_id>/', methods=['GET'])
+@login_required
+def mark_shipped(recipient_id=None):
+    recip = Match.get(Match.match_id == recipient_id)
+    if recip.secret_santa_id == current_user.id:
+        recip.ss_shipped = True
+        recip.save()
+    return redirect(url_for('admin.index'))
+
+
+@app.route('/unmark-shipped/<recipient_id>/', methods=['GET'])
+@login_required
+def unmark_shipped(recipient_id=None):
+    recip = Match.get(Match.match_id == recipient_id)
+    if recip.secret_santa_id == current_user.id:
+        recip.ss_shipped = False
+        recip.save()
+    return redirect(url_for('admin.index'))
+
+
 @app.route('/increase-potential', methods=['GET'])
 @login_required
 def increase_potential():

@@ -1,11 +1,11 @@
 import datetime
 import json
-from pycountry import countries
-from flask_login import UserMixin
 
+from flask_login import UserMixin
 from peewee import SqliteDatabase, CharField, BooleanField, ForeignKeyField, DateTimeField, PrimaryKeyField, TextField, \
     IntegerField
 from playhouse.flask_utils import FlaskDB
+from pycountry import countries
 
 DATABASE = 'secret_santa.db'
 db = SqliteDatabase(DATABASE)
@@ -137,6 +137,11 @@ class User(flask_db.Model, UserMixin):
         except IndexError:
             return ""
 
+    @property
+    def ss_did_ship(self):
+        m = self.secret_santa_mapping[0].ss_shipped
+        return m
+
     def __str__(self):
         return f"{self.discord_username}"
 
@@ -145,6 +150,7 @@ class Match(flask_db.Model):
     secret_santa = ForeignKeyField(User, backref='match')
     match = ForeignKeyField(User, backref='secret_santa_mapping')
     matched_address = CharField(null=True)
+    ss_shipped = BooleanField(default=False)
 
 
 class Settings(flask_db.Model):

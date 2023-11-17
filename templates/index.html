@@ -34,8 +34,15 @@
             <p>{{ recipient.discord_username }}'s Address: <span class="matchedAddress">
             {{ recipient.address_for_secret_santa }}
         </span>
+                <br/>
+                <b>
+                    {% if recipient.ss_did_ship %}
+                        <a href="{{ url_for('unmark_shipped', recipient_id=recipient.id) }}">Unmark as Shipped</a>
+                    {% else %}
+                        <a href="{{ url_for('mark_shipped', recipient_id=recipient.id) }}">Mark as Shipped</a>
+                    {% endif %}
+                </b>
             </p>
-
         {% else %}
             <p>Your recipient still needs to give you their address...! </p>
         {% endif %}
