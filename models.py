@@ -142,6 +142,11 @@ class User(flask_db.Model, UserMixin):
         m = self.secret_santa_mapping[0].ss_shipped
         return m
 
+    @property
+    def tracking_key(self):
+        m = self.secret_santa_mapping[0].tracking_key
+        return m
+
     def __str__(self):
         return f"{self.discord_username}"
 
@@ -152,6 +157,7 @@ class Match(flask_db.Model):
     matched_address = CharField(null=True)
     ss_shipped = BooleanField(default=False)
 
+    tracking_key = CharField(null=True)
 
 class Settings(flask_db.Model):
     data = JSONField(null=True)

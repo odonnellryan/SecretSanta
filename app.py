@@ -342,7 +342,6 @@ class MyModelView(ModelView):
 
 
 class UserView(ModelView):
-
     can_delete = False
 
     def _impersonate(view, context, model, name):
@@ -405,13 +404,17 @@ def load_user(user_id):
     return user
 
 
-@app.route('/mark-shipped/<recipient_id>/', methods=['GET'])
+@app.route('/mark-shipped/<recipient_id>/', methods=['GET', 'POST'])
 @login_required
 def mark_shipped(recipient_id=None):
     recip = Match.get(Match.match_id == recipient_id)
     if recip.secret_santa_id == current_user.id:
-        recip.ss_shipped = True
-        recip.save()
+        if request.method == 'POST':
+            tracking_id = request.form.get('tracking_id')
+            recip.ss_shipped = True
+            recip.tracking_key = tracking_id  # Assign the tracking ID
+            recip.save()
+        return redirect(url_for('admin.index'))
     return redirect(url_for('admin.index'))
 
 

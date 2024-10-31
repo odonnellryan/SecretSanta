@@ -20,7 +20,10 @@
             <p>Sorry. You don't get to be a santa. Ping ross() if you're upset, you can send him coffee. </p>
         {% endif %}
     {% endif %}
-    <br/>
+    {% if current_user.secret_santa and current_user.ss_did_ship %}
+        <p>Your Santa shipped your gift! The tracking id is: {{ current_user.tracking_key }}</p>
+    {% endif %}
+    <br />
     {% for recipient in current_user.recipients %}
         <hr/>
         <br/>
@@ -39,7 +42,11 @@
                     {% if recipient.ss_did_ship %}
                         <a href="{{ url_for('unmark_shipped', recipient_id=recipient.id) }}">Unmark as Shipped</a>
                     {% else %}
-                        <a href="{{ url_for('mark_shipped', recipient_id=recipient.id) }}">Mark as Shipped</a>
+                        <form action="{{ url_for('mark_shipped', recipient_id=recipient.id) }}" method="POST">
+                            <label for="tracking_id">Tracking ID:</label>
+                            <input type="text" name="tracking_id" id="tracking_id" required>
+                            <button type="submit">Mark as Shipped</button>
+                        </form>
                     {% endif %}
                 </b>
             </p>
