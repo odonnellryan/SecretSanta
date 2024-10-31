@@ -445,7 +445,8 @@ def store_gift_comments():
     current_user.gift_comments = d['giftComments']
     current_user.ship_internationally = d['shipInternationally']
     current_user.country = d['country']
-    current_user.received_gift = d['receivedGift']
+    if 'receivedGift' in d:
+        current_user.received_gift = d['receivedGift']
     current_user.save()
     return "success"
 
