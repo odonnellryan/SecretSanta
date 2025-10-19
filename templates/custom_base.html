@@ -244,6 +244,19 @@
             display: block;
         }
 
+        /* Song checkboxes - show them normally */
+        input[type="checkbox"].song-checkbox {
+            display: inline-block;
+            width: auto;
+            height: auto;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        #playlist li {
+            margin-bottom: 5px;
+        }
+
     </style>
 
     <script src="/static/js/snowstorm.js"></script>
@@ -285,10 +298,12 @@
         <button id="shuffle-button">Shuffle</button>
         <ul id="playlist">
             <li class="active">
+                <input type="checkbox" class="song-checkbox" data-song="{{ default_song }}" checked>
                 <a href="{{ url_for('static', filename='mp3/' + default_song) }}">{{ default_song }}</a>
             </li>
             {% for song in songs %}
                 <li>
+                    <input type="checkbox" class="song-checkbox" data-song="{{ song }}" checked>
                     <a href="{{ url_for('static', filename='mp3/' + song) }}">{{ song }}</a>
                 </li>
             {% endfor %}
@@ -325,6 +340,52 @@
             var tracks;
             var current;
 
+            // Load blocked songs from localStorage
+            function getBlockedSongs() {
+                const blocked = localStorage.getItem('blockedSongs');
+                return blocked ? JSON.parse(blocked) : [];
+            }
+
+            // Save blocked songs to localStorage
+            function saveBlockedSongs(blockedSongs) {
+                localStorage.setItem('blockedSongs', JSON.stringify(blockedSongs));
+            }
+
+            // Check if a song is enabled (not blocked)
+            function isSongEnabled(index) {
+                const checkbox = playlist.find('li').eq(index).find('.song-checkbox');
+                return checkbox.prop('checked');
+            }
+
+            // Find next enabled song
+            function getNextEnabledSong(startIndex) {
+                let attempts = 0;
+                let index = startIndex;
+                const totalSongs = playlist.find('li').length;
+
+                while (attempts < totalSongs) {
+                    if (isSongEnabled(index)) {
+                        return index;
+                    }
+                    index = (index + 1) % totalSongs;
+                    attempts++;
+                }
+                return -1; // No enabled songs found
+            }
+
+            // Get random enabled song
+            function getRandomEnabledSong() {
+                const enabledIndices = [];
+                playlist.find('li').each(function(index) {
+                    if (isSongEnabled(index)) {
+                        enabledIndices.push(index);
+                    }
+                });
+
+                if (enabledIndices.length === 0) return -1;
+                return enabledIndices[Math.floor(Math.random() * enabledIndices.length)];
+            }
+
             init();
 
             function init() {
@@ -334,20 +395,49 @@
                 tracks = playlist.find('li a');
                 len = tracks.length - 1;
                 audio[0].volume = .10;
+
+                // Restore blocked songs from localStorage
+                const blockedSongs = getBlockedSongs();
+                $('.song-checkbox').each(function() {
+                    const songName = $(this).data('song');
+                    if (blockedSongs.includes(songName)) {
+                        $(this).prop('checked', false);
+                    }
+                });
+
+                // Handle checkbox changes
+                $('.song-checkbox').on('change', function() {
+                    const songName = $(this).data('song');
+                    let blockedSongs = getBlockedSongs();
+
+                    if ($(this).prop('checked')) {
+                        // Remove from blocked list
+                        blockedSongs = blockedSongs.filter(s => s !== songName);
+                    } else {
+                        // Add to blocked list
+                        if (!blockedSongs.includes(songName)) {
+                            blockedSongs.push(songName);
+                        }
+                    }
+
+                    saveBlockedSongs(blockedSongs);
+                });
+
                 playlist.find('a').click(function (e) {
                     e.preventDefault();
                     link = $(this);
                     current = link.parent().index();
                     run(link, audio[0]);
                 });
+
                 audio[0].addEventListener('ended', function (e) {
-                    current++;
-                    if (current == len) {
-                        current = 0;
-                        link = playlist.find('a')[0];
-                    } else {
-                        link = playlist.find('a')[current];
+                    const nextSong = getNextEnabledSong(current + 1);
+                    if (nextSong === -1) {
+                        // No enabled songs, stop playback
+                        return;
                     }
+                    current = nextSong;
+                    link = playlist.find('a')[current];
                     run($(link), audio[0]);
                 });
                 updateAndScrollTitle($(playlist.find('a')[0]).text());
@@ -358,17 +448,23 @@
 
             // Add these lines in the init() function to set up event listeners for the new buttons
             skipButton.click(function () {
-                current++;
-                if (current > len) {
-                    current = 0;
+                const nextSong = getNextEnabledSong(current + 1);
+                if (nextSong === -1) {
+                    alert('No enabled songs to play!');
+                    return;
                 }
+                current = nextSong;
                 var link = playlist.find('a')[current];
                 run($(link), audio[0]);
-
             });
 
             shuffleButton.click(function () {
-                current = Math.floor(Math.random() * (len + 1));
+                const randomSong = getRandomEnabledSong();
+                if (randomSong === -1) {
+                    alert('No enabled songs to play!');
+                    return;
+                }
+                current = randomSong;
                 var link = playlist.find('a')[current];
                 run($(link), audio[0]);
             });

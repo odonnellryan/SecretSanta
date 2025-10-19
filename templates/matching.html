@@ -1,11 +1,40 @@
 {% extends 'admin/master.html' %}
 
 {% block head %}
+<style>
+    .clear-matches-section {
+        margin-top: 30px;
+        padding: 20px;
+        border: 2px solid #dc3545;
+        border-radius: 5px;
+        background-color: #f8d7da;
+    }
+    .clear-matches-section h3 {
+        color: #721c24;
+    }
+</style>
 {% endblock %}
 
 {% block body %}
 <a href="{{ url_for('matching.create_matches') }}">
     <button type="button" class="btn btn-success">Match Users.</button>
 </a>
+
+<div class="clear-matches-section">
+    <h3>Clear All Matches (New Year Reset)</h3>
+    <p><strong>This will:</strong></p>
+    <ul>
+        <li>Mark all current matches as inactive (archived)</li>
+        <li>Reset all users to inactive (they must login to participate in next year's matching)</li>
+        <li>Prior year matches are preserved to avoid repeat matches in future years</li>
+    </ul>
+    <form method="POST" action="{{ url_for('matching.clear_matches') }}" onsubmit="return confirm('Are you sure you want to clear all matches and reset users? This cannot be undone.');">
+        <div class="form-group">
+            <label for="confirmation">Type "CLEAR MATCHES" to confirm:</label>
+            <input type="text" class="form-control" id="confirmation" name="confirmation" required style="max-width: 300px;">
+        </div>
+        <button type="submit" class="btn btn-danger">Clear All Matches</button>
+    </form>
+</div>
 {% endblock %}
 

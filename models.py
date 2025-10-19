@@ -75,9 +75,10 @@ class User(flask_db.Model, UserMixin):
     ship_internationally = BooleanField(default=False)
 
     max_match_count = IntegerField(default=1)
+    active_this_year = BooleanField(default=False)
 
     def eligible_for_participation(self):
-        return self.country and self.public_key
+        return self.country and self.public_key and self.active_this_year
 
     def is_eligible_for_ss(self):
         return self.n_recipients < self.max_match_count and self.public_key and self.country
@@ -106,14 +107,16 @@ class User(flask_db.Model, UserMixin):
     @property
     def secret_santa_public_key(self):
         try:
-            return self.secret_santa_mapping[0].secret_santa.public_key
+            active_matches = [m for m in self.secret_santa_mapping if m.is_active]
+            return active_matches[0].secret_santa.public_key
         except IndexError:
             return ""
 
     @property
     def secret_santa(self):
         try:
-            return self.secret_santa_mapping[0].secret_santa
+            active_matches = [m for m in self.secret_santa_mapping if m.is_active]
+            return active_matches[0].secret_santa
         except IndexError:
             return None
 
@@ -123,28 +126,32 @@ class User(flask_db.Model, UserMixin):
 
     @property
     def n_recipients(self):
-        return len(self.match)
+        return len([m for m in self.match if m.is_active])
 
     @property
     def recipients(self):
         for match in self.match:
-            yield match.match
+            if match.is_active:
+                yield match.match
 
     @property
     def address_for_secret_santa(self):
         try:
-            return self.secret_santa_mapping[0].matched_address
+            active_matches = [m for m in self.secret_santa_mapping if m.is_active]
+            return active_matches[0].matched_address
         except IndexError:
             return ""
 
     @property
     def ss_did_ship(self):
-        m = self.secret_santa_mapping[0].ss_shipped
+        active_matches = [m for m in self.secret_santa_mapping if m.is_active]
+        m = active_matches[0].ss_shipped
         return m
 
     @property
     def tracking_key(self):
-        m = self.secret_santa_mapping[0].tracking_key
+        active_matches = [m for m in self.secret_santa_mapping if m.is_active]
+        m = active_matches[0].tracking_key
         return m
 
     def __str__(self):
@@ -156,6 +163,7 @@ class Match(flask_db.Model):
     match = ForeignKeyField(User, backref='secret_santa_mapping')
     matched_address = CharField(null=True)
     ss_shipped = BooleanField(default=False)
+    is_active = BooleanField(default=True)
 
     tracking_key = CharField(null=True)
 

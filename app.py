@@ -26,9 +26,17 @@ app.config['FLASK_ADMIN_SWATCH'] = 'superhero'
 initialize_database(app)
 
 
+@app.before_request
+def mark_user_active():
+    """Mark any logged-in user as active for this year's matching."""
+    if current_user.is_authenticated and not current_user.active_this_year:
+        current_user.active_this_year = True
+        current_user.save()
+
+
 def get_users_without_secret_santa():
     users = User.select()
-    matches = list(Match.select())
+    matches = list(Match.select().where(Match.is_active == True))
 
     if not matches:
         return [None]
@@ -70,7 +78,7 @@ def inject_variables():
         'songs': file_list,
         'users_without_secret_santa_exist': users_without_secret_santa_exist(),
         'gift_comments': gift_comments,
-        'matches_exist': len(Match.select()),
+        'matches_exist': len(Match.select().where(Match.is_active == True)),
         'public_key': public_key,
         'private_key': private_key
     }
@@ -194,6 +202,67 @@ class UserGroup:
         pass
 
 
+def had_prior_match(santa: User, recipient: User) -> bool:
+    """Check if santa was matched with recipient in any prior (inactive) year."""
+    prior_matches = Match.select().where(
+        (Match.secret_santa == santa) &
+        (Match.match == recipient) &
+        (Match.is_active == False)
+    )
+    return prior_matches.count() > 0
+
+
+def optimize_circle_for_no_repeats(user_list: List[User]) -> List[User]:
+    """
+    Try to reorder the user list to minimize repeat matches from prior years.
+    Uses a greedy approach to place users in positions that avoid prior matches.
+    """
+    if len(user_list) <= 2:
+        return user_list
+
+    # Start with a shuffled copy
+    optimized = []
+    remaining = user_list.copy()
+
+    # Pick a random first person
+    current = remaining.pop(0)
+    optimized.append(current)
+
+    # For each subsequent position, try to find someone who wasn't matched before
+    while remaining:
+        best_candidate = None
+        best_score = -1
+
+        for candidate in remaining:
+            # Check if current person gave to this candidate before
+            has_prior = had_prior_match(current, candidate)
+
+            # Prefer candidates without prior matches
+            score = 0 if has_prior else 1
+
+            # Also check the closing of the circle (last person -> first person)
+            if len(remaining) == 1:
+                # This is the last person, check if they gave to the first person before
+                if had_prior_match(candidate, optimized[0]):
+                    score -= 1
+
+            if score > best_score:
+                best_score = score
+                best_candidate = candidate
+
+        if best_candidate:
+            optimized.append(best_candidate)
+            remaining.remove(best_candidate)
+            current = best_candidate
+        else:
+            # Fallback: just take the first remaining
+            optimized.append(remaining[0])
+            current = remaining[0]
+            remaining.pop(0)
+
+    return optimized
+
+
 def create_matches(country_group: CountryGroup):
     int_users = [u for u in country_group.users if u.ship_internationally and u.is_eligible_for_ss()]
     non_int_users = [u for u in country_group.users if not u.ship_internationally and u.is_eligible_for_ss()]
@@ -202,6 +271,9 @@ def create_matches(country_group: CountryGroup):
 
     if not country_group:
         return
+
+    # Optimize the user list to avoid prior year matches
+    user_list = optimize_circle_for_no_repeats(user_list)
 
     ss = country_group.get_first_avail_secret_santa(users=user_list)
 
@@ -212,6 +284,8 @@ def create_matches(country_group: CountryGroup):
     for recipient in user_list:
 
         if ss and ss.can_be_secret_santa(recipient):
+            if ss.is_bailey():
+                del ss
             Match.create(secret_santa=ss, match=recipient)
             ss = recipient
 
@@ -236,12 +310,6 @@ def match_users():
     random.shuffle(niu)
     int_users = UserGroup(iu)
     non_int_users = UserGroup(niu)
-
-    # for country in non_int_users.countries.values():
-    #     if len(country.users) < 2:
-    #         ss = int_users.get_first_avail_secret_santa(country.country, international=False)
-    #         if ss:
-    #             country.users.append(ss)
 
     for country in sorted(int_users.countries.values(), key=lambda c: len(c)):
         for user in country.users:
@@ -303,6 +371,21 @@ class Matching(BaseView):
     @expose('/create-matches')
     def create_matches(self):
         match_users()
+        return redirect(url_for('matching.index'))
+
+    @expose('/clear-matches', methods=['POST'])
+    def clear_matches(self):
+        confirmation = request.form.get('confirmation', '')
+        if confirmation == 'CLEAR MATCHES':
+            # Mark all active matches as inactive instead of deleting them
+            active_matches = Match.select().where(Match.is_active == True)
+            for match in active_matches:
+                match.is_active = False
+                match.save()
+
+            # Reset all users to inactive for the new year
+            # Users must login again to be included in next year's matching
+            User.update(active_this_year=False).execute()
         return redirect(url_for('matching.index'))
 
 
@@ -509,6 +592,10 @@ def callback():
     user, _ = User.get_or_create(
         discord_username=user_data['username']
     )
+
+    # Mark user as active for this year's matching
+    user.active_this_year = True
+    user.save()
 
     my_user_login(user, user_data)
 
