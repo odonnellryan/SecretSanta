@@ -264,6 +264,7 @@ def optimize_circle_for_no_repeats(user_list: List[User]) -> List[User]:
 
 
 def create_matches(country_group: CountryGroup):
+
     int_users = [u for u in country_group.users if u.ship_internationally and u.is_eligible_for_ss()]
     non_int_users = [u for u in country_group.users if not u.ship_internationally and u.is_eligible_for_ss()]
 
@@ -284,8 +285,6 @@ def create_matches(country_group: CountryGroup):
     for recipient in user_list:
 
         if ss and ss.can_be_secret_santa(recipient):
-            if ss.is_bailey():
-                del ss
             Match.create(secret_santa=ss, match=recipient)
             ss = recipient
 

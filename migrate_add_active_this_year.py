@@ -18,7 +18,7 @@ def migrate():
     print("Adding 'active_this_year' column to User table...")
 
     try:
-        db.execute_sql('ALTER TABLE user ADD COLUMN active_this_year INTEGER DEFAULT 0')
+        db.execute_sql('ALTER TABLE user ADD COLUMN active_this_year INTEGER DEFAULT 0;')
         print("Column added successfully!")
 
         # Update all existing users to have active_this_year = False (they need to login)
