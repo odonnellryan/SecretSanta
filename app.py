@@ -562,7 +562,7 @@ def store_gift_comments():
 @login_required
 def store_address():
     data = request.json
-    match = current_user.secret_santa_mapping[0]
+    match = [m for m in current_user.secret_santa_mapping if m.is_active][0]
     match.matched_address = data['encryptedAddress']
     match.save()
     return "success"

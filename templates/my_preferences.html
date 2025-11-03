@@ -49,9 +49,10 @@
     </div>
     {% if current_user.secret_santa %}
         {% if current_user.address_for_secret_santa %}
-            <p class="toggleForm"><a><strong>YOUR ADDRESS IS SET!!! Click here to update.</strong></a></p>
+            <p><strong>your address has been encrypted and shared with your top</strong></p>
+            <p class="toggleForm"><a>Click here to update your address</a></p>
             <div class="hiddenForm">
-                <p>We don't show your address because we can't decrypt it. Updating it will probably work. </p>
+                <p>We don't show your address because we can't decrypt it. You can update it below.</p>
                 <textarea id="address"></textarea>
                 <br/>
                 <button id="saveAddress" type="submit" onclick="encryptAndSendData()">Save Address
