@@ -81,7 +81,7 @@ class User(flask_db.Model, UserMixin):
         return self.country and self.public_key and self.active_this_year
 
     def is_eligible_for_ss(self):
-        return self.n_recipients < self.max_match_count and self.public_key and self.country
+        return self.n_recipients < self.max_match_count and self.public_key and self.country and self.active_this_year
 
     def can_be_secret_santa(self, recipient: 'User'):
         return recipient is not None and not recipient.secret_santa and self.is_eligible_for_ss() and \

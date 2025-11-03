@@ -16,6 +16,10 @@
 {% endblock %}
 
 {% block body %}
+<div class="alert alert-info" role="alert">
+    <strong>Active Users This Year:</strong> {{ active_user_count }}
+</div>
+
 <a href="{{ url_for('matching.create_matches') }}">
     <button type="button" class="btn btn-success">Match Users.</button>
 </a>

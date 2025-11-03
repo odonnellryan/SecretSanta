@@ -35,7 +35,7 @@ def mark_user_active():
 
 
 def get_users_without_secret_santa():
-    users = User.select()
+    users = User.select().where(User.active_this_year == True)
     matches = list(Match.select().where(Match.is_active == True))
 
     if not matches:
@@ -282,14 +282,29 @@ def create_matches(country_group: CountryGroup):
         return
 
     first_user = ss
+
+    # Build the circle plan first without creating matches
+    planned_matches = []
     for recipient in user_list:
+        if ss and ss.id != recipient.id:  # Can't give to self
+            # Check shipping constraints
+            can_ship = (ss.ship_internationally or ss.country == recipient.country or
+                       (ss.country == EU and recipient.country in EU_COUNTRIES))
+            if can_ship and ss.public_key and recipient.public_key:
+                planned_matches.append((ss, recipient))
+                ss = recipient
 
-        if ss and ss.can_be_secret_santa(recipient):
-            Match.create(secret_santa=ss, match=recipient)
-            ss = recipient
+    # Close the circle if possible
+    if ss and first_user and ss.id != first_user.id:
+        can_ship = (ss.ship_internationally or ss.country == first_user.country or
+                   (ss.country == EU and first_user.country in EU_COUNTRIES))
+        if can_ship and ss.public_key and first_user.public_key:
+            planned_matches.append((ss, first_user))
 
-    if ss.can_be_secret_santa(first_user):
-        Match.create(secret_santa=ss, match=first_user)
+    # Only create matches if we have a complete circle
+    if len(planned_matches) == len(user_list):
+        for santa, recipient in planned_matches:
+            Match.create(secret_santa=santa, match=recipient)
 
 
 def match_users_for_tiny_tims():
@@ -303,9 +318,9 @@ def match_users_for_tiny_tims():
 
 
 def match_users():
-    iu = list(User.select().where(User.ship_internationally == True))
+    iu = list(User.select().where(User.ship_internationally == True, User.active_this_year == True))
     random.shuffle(iu)
-    niu = list(User.select().where(User.ship_internationally == False))
+    niu = list(User.select().where(User.ship_internationally == False, User.active_this_year == True))
     random.shuffle(niu)
     int_users = UserGroup(iu)
     non_int_users = UserGroup(niu)
@@ -319,19 +334,21 @@ def match_users():
         country.users = []
 
     # handle the EU first: drop all int'l EU people int the EU if there aren't enough people in the EU
+    try:
+        eu_group = non_int_users.countries[EU]
 
-    eu_group = non_int_users.countries[EU]
-
-    while len(eu_group) < 2 or eu_group.has_odd_match_count():
-        for country_name, country in non_int_users.countries.items():
-            if country_name in EU_COUNTRIES:
-                if len(country) < 2:
-                    usrs = copy.copy(country.users)
-                    for user in usrs:
-                        if user.ship_internationally:
-                            eu_group.add_user(user)
-                            country.users.remove(user)
-        break
+        while len(eu_group) < 2 or eu_group.has_odd_match_count():
+            for country_name, country in non_int_users.countries.items():
+                if country_name in EU_COUNTRIES:
+                    if len(country) < 2:
+                        usrs = copy.copy(country.users)
+                        for user in usrs:
+                            if user.ship_internationally:
+                                eu_group.add_user(user)
+                                country.users.remove(user)
+            break
+    except KeyError:
+        pass
 
     for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
         if len(country) == 1 or country.has_odd_match_count() and not country.country == EU:
@@ -365,7 +382,8 @@ class Matching(BaseView):
 
     @expose('/')
     def index(self):
-        return self.render('matching.html')
+        active_user_count = User.select().where(User.active_this_year == True).count()
+        return self.render('matching.html', active_user_count=active_user_count)
 
     @expose('/create-matches')
     def create_matches(self):
@@ -381,12 +399,16 @@ class Matching(BaseView):
             for match in active_matches:
                 match.is_active = False
                 match.save()
-
-            # Reset all users to inactive for the new year
-            # Users must login again to be included in next year's matching
             User.update(active_this_year=False).execute()
         return redirect(url_for('matching.index'))
 
+    @expose('/clear-matches-for-testing', methods=['GET'])
+    def clear_matches(self):
+        active_matches = Match.select().where(Match.is_active == True)
+        for match in active_matches:
+            match.is_active = False
+            match.save()
+        return redirect(url_for('matching.index'))
 
 admin = Admin(app,
               index_view=HomeView(
@@ -445,7 +467,10 @@ class UserView(ModelView):
 
     column_list = (
         'discord_username', 'secret_santa', 'recipients', 'address_for_secret_santa', 'received_gift', 'created',
-        'is_admin', 'impersonate', 'has_public_key', 'has_private_key', 'ship_internationally')
+        'is_admin', 'active_this_year', 'impersonate', 'has_public_key', 'has_private_key', 'ship_internationally')
+
+    form_columns = ('discord_username', 'is_admin', 'active_this_year', 'ship_internationally',
+                    'country', 'gift_comments', 'received_gift', 'max_match_count')
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.is_admin
