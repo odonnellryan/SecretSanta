@@ -275,6 +275,11 @@
             integrity="sha512-E8QSvWZ0eCLGk4km3hxSsNmGWbLtSCSUcewDQPQWZF6pEU8GlT8a5fF32wOl1i8ftdMhssTrF/OhyGWwonTcXA=="
             crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
+{% block brand %}
+    <a class="navbar-brand" href="{{ admin_view.admin.url }}">{{ admin_view.admin.name }}</a>
+    <a class="navbar-brand" href="https://ceto.coffee/" target="_blank" rel="noopener"
+       style="font-size: 14px; font-weight: normal;">sponsored by <u>ceto.coffee</u></a>
+{% endblock %}
 {% block page_body %}
     {% if 'original_user' in session %}
         <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">

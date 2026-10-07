@@ -64,6 +64,7 @@ class User(flask_db.Model, UserMixin):
     is_admin = BooleanField(default=False)
 
     discord_username = CharField()
+    discord_id = CharField(null=True, index=True)
 
     public_key = CharField(null=True)
     private_key = CharField(null=True)

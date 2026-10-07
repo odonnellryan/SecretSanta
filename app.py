@@ -1,10 +1,8 @@
-import copy
 import os
 import random
-from typing import List, Dict
 
 import requests
-from flask import Flask, redirect, url_for, request, session
+from flask import Flask, redirect, url_for, request, session, flash
 from flask_admin import Admin, expose, BaseView, AdminIndexView
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.menu import MenuLink
@@ -12,7 +10,8 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from markupsafe import Markup
 
 import config
-from models import initialize_database, User, Match, EU, EU_COUNTRIES
+from matching import match_users, summarize
+from models import initialize_database, User, Match
 
 app = Flask(__name__)
 
@@ -35,23 +34,18 @@ def mark_user_active():
 
 
 def get_users_without_secret_santa():
-    users = User.select().where(User.active_this_year == True)
-    matches = list(Match.select().where(Match.is_active == True))
-
-    if not matches:
-        return [None]
-
-    for user in users:
-        if not user.secret_santa and user.country and user.public_key:
-            yield user
+    """Active, eligible users with no santa this year. Empty until matching has run at all."""
+    active_matches = Match.select().where(Match.is_active == True)
+    if not active_matches.exists():
+        return []
+    matched = active_matches.select(Match.match)
+    return list(User.select().where(
+        (User.active_this_year == True) & User.country.is_null(False) & User.public_key.is_null(False)
+        & User.id.not_in(matched)))
 
 
 def users_without_secret_santa_exist():
-    users = list(get_users_without_secret_santa())
-    for u in users:
-        if u:
-            return True
-    return False
+    return bool(get_users_without_secret_santa())
 
 
 @app.context_processor
@@ -127,251 +121,6 @@ class LoginView(BaseView):
         return self.render('login.html')
 
 
-class CountryGroup:
-
-    def __init__(self, user: User):
-        self.country: str = user.country
-        self.users: List[User] = [user]
-
-    def has_odd_match_count(self):
-        # the group of users needs int' users on either end
-        check_non_country = len([u for u in self.users if u.country != self.country])
-        check_non_int = len([u for u in self.users if u.ship_internationally and u.country == self.country])
-        return check_non_country >= 1 and check_non_country + check_non_int == 1
-
-    def add_user(self, user: User):
-        self.users.append(user)
-
-    def __len__(self):
-        return len(self.users)
-
-    def n_available_santas(self):
-        return len([u for u in self.users if u and u.is_eligible_for_ss()])
-
-    def get_first_avail_secret_santa(self, international=False, users=None):
-        if users is None:
-            users = self.users
-        for u in users:
-            if not u:
-                continue
-            if international and not u.ship_internationally:
-                continue
-            if u.is_eligible_for_ss():
-                return u
-
-
-class UserGroup:
-
-    def __init__(self, users: List[User]):
-        self.users = users
-        self.countries: Dict[str, CountryGroup] = {}
-
-        for user in self.users:
-            if not user.eligible_for_participation():
-                continue
-            if user.country in self.countries:
-                self.countries[user.country].add_user(user)
-            else:
-                self.countries[user.country] = CountryGroup(user)
-
-    def get_first_avail_secret_santa(self, country, user=None, remove=True, international=True):
-
-        n_avail_santas = 0
-        if country in self.countries:
-            n_avail_santas = self.countries[country].n_available_santas()
-
-        if n_avail_santas:
-            ss = self.countries[country].get_first_avail_secret_santa()
-            if remove:
-                self.countries[country].users.remove(ss)
-            return ss
-
-        for cg in sorted(self.countries.values(), key=lambda c: c.n_available_santas(), reverse=True):
-            if cg.n_available_santas() == 2:
-                continue
-            ss = cg.get_first_avail_secret_santa(international=international)
-            if ss:
-                if user:
-                    if user.id == ss.id:
-                        continue
-                if remove:
-                    cg.users.remove(ss)
-                return ss
-
-    def consolidate_countries(self):
-        pass
-
-
-def had_prior_match(santa: User, recipient: User) -> bool:
-    """Check if santa was matched with recipient in any prior (inactive) year."""
-    prior_matches = Match.select().where(
-        (Match.secret_santa == santa) &
-        (Match.match == recipient) &
-        (Match.is_active == False)
-    )
-    return prior_matches.count() > 0
-
-
-def optimize_circle_for_no_repeats(user_list: List[User]) -> List[User]:
-    """
-    Try to reorder the user list to minimize repeat matches from prior years.
-    Uses a greedy approach to place users in positions that avoid prior matches.
-    """
-    if len(user_list) <= 2:
-        return user_list
-
-    # Start with a shuffled copy
-    optimized = []
-    remaining = user_list.copy()
-
-    # Pick a random first person
-    current = remaining.pop(0)
-    optimized.append(current)
-
-    # For each subsequent position, try to find someone who wasn't matched before
-    while remaining:
-        best_candidate = None
-        best_score = -1
-
-        for candidate in remaining:
-            # Check if current person gave to this candidate before
-            has_prior = had_prior_match(current, candidate)
-
-            # Prefer candidates without prior matches
-            score = 0 if has_prior else 1
-
-            # Also check the closing of the circle (last person -> first person)
-            if len(remaining) == 1:
-                # This is the last person, check if they gave to the first person before
-                if had_prior_match(candidate, optimized[0]):
-                    score -= 1
-
-            if score > best_score:
-                best_score = score
-                best_candidate = candidate
-
-        if best_candidate:
-            optimized.append(best_candidate)
-            remaining.remove(best_candidate)
-            current = best_candidate
-        else:
-            # Fallback: just take the first remaining
-            optimized.append(remaining[0])
-            current = remaining[0]
-            remaining.pop(0)
-
-    return optimized
-
-
-def create_matches(country_group: CountryGroup):
-
-    int_users = [u for u in country_group.users if u.ship_internationally and u.is_eligible_for_ss()]
-    non_int_users = [u for u in country_group.users if not u.ship_internationally and u.is_eligible_for_ss()]
-
-    user_list = int_users[:len(int_users) // 2] + non_int_users + int_users[len(int_users) // 2:]
-
-    if not country_group:
-        return
-
-    # Optimize the user list to avoid prior year matches
-    user_list = optimize_circle_for_no_repeats(user_list)
-
-    ss = country_group.get_first_avail_secret_santa(users=user_list)
-
-    if ss is None:
-        return
-
-    first_user = ss
-
-    # Build the circle plan first without creating matches
-    planned_matches = []
-    for recipient in user_list:
-        if ss and ss.id != recipient.id:  # Can't give to self
-            # Check shipping constraints
-            can_ship = (ss.ship_internationally or ss.country == recipient.country or
-                       (ss.country == EU and recipient.country in EU_COUNTRIES))
-            if can_ship and ss.public_key and recipient.public_key:
-                planned_matches.append((ss, recipient))
-                ss = recipient
-
-    # Close the circle if possible
-    if ss and first_user and ss.id != first_user.id:
-        can_ship = (ss.ship_internationally or ss.country == first_user.country or
-                   (ss.country == EU and first_user.country in EU_COUNTRIES))
-        if can_ship and ss.public_key and first_user.public_key:
-            planned_matches.append((ss, first_user))
-
-    # Only create matches if we have a complete circle
-    if len(planned_matches) == len(user_list):
-        for santa, recipient in planned_matches:
-            Match.create(secret_santa=santa, match=recipient)
-
-
-def match_users_for_tiny_tims():
-    users_who_can_be_santa = [u for u in User.select() if u.is_eligible_for_ss()]
-    users_without_secret_santas = get_users_without_secret_santa()
-    for recipient in users_without_secret_santas:
-        random.shuffle(users_who_can_be_santa)
-        for santa in users_who_can_be_santa:
-            if santa.can_be_secret_santa(recipient):
-                Match.create(secret_santa=santa, match=recipient)
-
-
-def match_users():
-    iu = list(User.select().where(User.ship_internationally == True, User.active_this_year == True))
-    random.shuffle(iu)
-    niu = list(User.select().where(User.ship_internationally == False, User.active_this_year == True))
-    random.shuffle(niu)
-    int_users = UserGroup(iu)
-    non_int_users = UserGroup(niu)
-
-    for country in sorted(int_users.countries.values(), key=lambda c: len(c)):
-        for user in country.users:
-            if country.country in non_int_users.countries:
-                non_int_users.countries[country.country].add_user(user)
-            else:
-                non_int_users.countries[country.country] = CountryGroup(user)
-        country.users = []
-
-    # handle the EU first: drop all int'l EU people int the EU if there aren't enough people in the EU
-    try:
-        eu_group = non_int_users.countries[EU]
-
-        while len(eu_group) < 2 or eu_group.has_odd_match_count():
-            for country_name, country in non_int_users.countries.items():
-                if country_name in EU_COUNTRIES:
-                    if len(country) < 2:
-                        usrs = copy.copy(country.users)
-                        for user in usrs:
-                            if user.ship_internationally:
-                                eu_group.add_user(user)
-                                country.users.remove(user)
-            break
-    except KeyError:
-        pass
-
-    for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
-        if len(country) == 1 or country.has_odd_match_count() and not country.country == EU:
-            ss = non_int_users.get_first_avail_secret_santa(None, user=country.users[0])
-            if ss is not None:
-                non_int_users.countries[country.country].add_user(ss)
-
-    for country in sorted(non_int_users.countries.values(), key=lambda c: len(c)):
-        create_matches(country)
-
-    int_users = UserGroup(iu)
-
-    for u in get_users_without_secret_santa():
-        ss = int_users.get_first_avail_secret_santa(None, user=u)
-        if ss is None:
-            continue
-        while not ss.can_be_secret_santa(u):
-            ss = non_int_users.get_first_avail_secret_santa(None, user=u)
-            if ss is None:
-                continue
-        Match.create(secret_santa=ss, match=u)
-
-
 class Matching(BaseView):
 
     def inaccessible_callback(self, name, **kwargs):
@@ -387,7 +136,8 @@ class Matching(BaseView):
 
     @expose('/create-matches')
     def create_matches(self):
-        match_users()
+        plan = match_users()
+        flash(summarize(plan), 'info')
         return redirect(url_for('matching.index'))
 
     @expose('/clear-matches', methods=['POST'])
@@ -395,20 +145,19 @@ class Matching(BaseView):
         confirmation = request.form.get('confirmation', '')
         if confirmation == 'CLEAR MATCHES':
             # Mark all active matches as inactive instead of deleting them
-            active_matches = Match.select().where(Match.is_active == True)
-            for match in active_matches:
-                match.is_active = False
-                match.save()
-            User.update(active_this_year=False).execute()
+            Match.update(is_active=False).where(Match.is_active == True).execute()
+            # Everyone starts next year inactive, with a single gift to give, until they log in again
+            User.update(active_this_year=False, max_match_count=1, received_gift=False).execute()
+            flash('Matches archived and all users reset for the new year.', 'info')
+        else:
+            flash('Confirmation text did not match; nothing was changed.', 'error')
         return redirect(url_for('matching.index'))
 
     @expose('/clear-matches-for-testing', methods=['GET'])
-    def clear_matches(self):
-        active_matches = Match.select().where(Match.is_active == True)
-        for match in active_matches:
-            match.is_active = False
-            match.save()
+    def clear_matches_for_testing(self):
+        Match.update(is_active=False).where(Match.is_active == True).execute()
         return redirect(url_for('matching.index'))
+
 
 admin = Admin(app,
               index_view=HomeView(
@@ -469,7 +218,7 @@ class UserView(ModelView):
         'discord_username', 'secret_santa', 'recipients', 'address_for_secret_santa', 'received_gift', 'created',
         'is_admin', 'active_this_year', 'impersonate', 'has_public_key', 'has_private_key', 'ship_internationally')
 
-    form_columns = ('discord_username', 'is_admin', 'active_this_year', 'ship_internationally',
+    form_columns = ('discord_username', 'discord_id', 'is_admin', 'active_this_year', 'ship_internationally',
                     'country', 'gift_comments', 'received_gift', 'max_match_count')
 
     def is_accessible(self):
@@ -511,25 +260,29 @@ def load_user(user_id):
     return user
 
 
+def my_active_match_for(recipient_id):
+    """This year's match where current_user is the santa of recipient_id, or None."""
+    return Match.get_or_none((Match.match_id == int(recipient_id)) & (Match.secret_santa_id == current_user.id)
+                             & (Match.is_active == True))
+
+
 @app.route('/mark-shipped/<recipient_id>/', methods=['GET', 'POST'])
 @login_required
 def mark_shipped(recipient_id=None):
-    recip = Match.get(Match.match_id == recipient_id)
-    if recip.secret_santa_id == current_user.id:
-        if request.method == 'POST':
-            tracking_id = request.form.get('tracking_id')
-            recip.ss_shipped = True
-            recip.tracking_key = tracking_id  # Assign the tracking ID
-            recip.save()
-        return redirect(url_for('admin.index'))
+    recip = my_active_match_for(recipient_id)
+    if recip is not None and request.method == 'POST':
+        tracking_id = request.form.get('tracking_id')
+        recip.ss_shipped = True
+        recip.tracking_key = tracking_id  # Assign the tracking ID
+        recip.save()
     return redirect(url_for('admin.index'))
 
 
 @app.route('/unmark-shipped/<recipient_id>/', methods=['GET'])
 @login_required
 def unmark_shipped(recipient_id=None):
-    recip = Match.get(Match.match_id == recipient_id)
-    if recip.secret_santa_id == current_user.id:
+    recip = my_active_match_for(recipient_id)
+    if recip is not None:
         recip.ss_shipped = False
         recip.save()
     return redirect(url_for('admin.index'))
@@ -538,10 +291,16 @@ def unmark_shipped(recipient_id=None):
 @app.route('/increase-potential', methods=['GET'])
 @login_required
 def increase_potential():
+    """Volunteer to give one more gift, and hand the clicker a user who has no santa if they can ship to them."""
     if users_without_secret_santa_exist():
+        before = current_user.n_recipients
         current_user.max_match_count = current_user.max_match_count + 1
         current_user.save()
-        match_users_for_tiny_tims()
+        match_users()
+        if current_user.n_recipients == before:
+            # nobody the clicker could ship to; don't leave the extra slot dangling
+            current_user.max_match_count = current_user.max_match_count - 1
+            current_user.save()
     return redirect(url_for('admin.index'))
 
 
@@ -595,6 +354,18 @@ def my_user_login(user, discord_data):
     session['public_key'] = current_user.public_key if current_user.public_key is not None else ''
 
 
+def find_or_create_user(user_data):
+    """Look users up by their stable Discord id; fall back to username for accounts from before we stored ids."""
+    discord_id = str(user_data['id'])
+    user = User.get_or_none(User.discord_id == discord_id)
+    if user is None:
+        user, _ = User.get_or_create(discord_username=user_data['username'])
+        user.discord_id = discord_id
+    else:
+        user.discord_username = user_data['username']
+    return user
+
+
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
@@ -613,9 +384,7 @@ def callback():
 
     user_data = user_response.json()
 
-    user, _ = User.get_or_create(
-        discord_username=user_data['username']
-    )
+    user = find_or_create_user(user_data)
 
     # Mark user as active for this year's matching
     user.active_this_year = True
