@@ -179,7 +179,7 @@ class LogoutMenuLink(MenuLink):
         return current_user.is_authenticated
 
 
-admin.add_view(LoginView(name='Login', url="/login"))
+admin.add_view(LoginView(name='Log In and Sign Up For Secret Santa', url="/login"))
 admin.add_view(Matching(name='Matching', url="/matching"))
 admin.add_view(PreferencesView(name='My Preferences', url="/my-preferences"))
 admin.add_link(LogoutMenuLink(name='Logout', category='', url="/logout"))
